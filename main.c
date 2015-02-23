@@ -3,8 +3,30 @@
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
+#include <dirent.h>
 
 u32 nop_slide[0x1000] __attribute__((aligned(0x1000)));
+FS_archive saveArchive;
+u32 archives[27] = {0x3, 0x4, 0x6, 0x7, 0x8, 0x9, 0xA, 0x12345678,0x12345679,0x1234567B,0x1234567C,0x2345678A,
+0x2345678B,0x2345678C,0x2345678D,0x2345678E,0x567890AB,
+0x567890AC,0x567890AD,0x567890AE,0x567890AF,0x567890B0,
+0x567890B1,0x567890B2};
+u32 archiveCount = 0;
+
+struct FileHandle {
+    Handle handle;
+    size_t head;
+};
+
+struct DirStruct {
+    Handle handle;
+    struct dirent activeEntry;
+};
+struct DirStruct dir;
+char fs_cwd[512];
+void fs_chdir(const char* s);
+char* fs_getfilelist(int *nfiles);
+void fs_relativePath(char* dest, const char* src);
 
 int main()
 {
@@ -14,14 +36,23 @@ int main()
 	hidInit(NULL);	// input (buttons, screen)
 	gfxInitDefault();			// graphics
 	fsInit();
+	sdmcInit();
 	hbInit();
 	
 	qtmInit();
 	consoleInit(GFX_BOTTOM, NULL);
 
 	uvl_entry();
+	printf("done\n");
 
-		printf("done\n");
+	u8 isInserted = 3;
+	int nfiles = 0;
+	saveArchive = saveArchive=(FS_archive){0x1234567C, (FS_path){PATH_EMPTY, 1, (u8*)""}};
+    strcpy(fs_cwd, "");
+    dir.handle = 0;
+    fs_chdir("/");
+	//consoleClear();
+
 	while (aptMainLoop())
 	{
 		// Wait next screen refresh
@@ -33,12 +64,41 @@ int main()
 		u32 kHeld = hidKeysHeld();
 		
 		// If START is pressed, break loop and quit
-		if (kDown){
+		if (kDown & KEY_X){
 			break;
 		}
 
-          printf("%x ", *(int *)0x14410000);
-          svcSleepThread (0x10000000LL);
+		if(kDown & KEY_A)
+		{
+consoleClear();
+			Result ret;
+			saveArchive=(FS_archive){archives[archiveCount], (FS_path){PATH_EMPTY, 1, (u8*)""}};
+			
+			u32 totalWritten;
+			Handle fileHandle;
+			ret=FSUSER_OpenArchive(NULL, &saveArchive);
+			if(ret)
+			{
+				printf("Save Archive open failed!\n");
+				goto saveEnd;
+			}
+			strcpy(fs_cwd, "");
+			dir.handle = 0;
+			fs_chdir("/");
+
+			char* files = fs_getfilelist(&nfiles);
+			printf("%i files\n", nfiles);
+			printf(files);
+
+			saveEnd:
+			printf("done %x\n", archives[archiveCount]);
+			archiveCount++;
+		}
+
+		if(kDown & KEY_B) printf("%x ", *(int *)0x14410000);
+
+          FSUSER_CardSlotIsInserted(NULL, &isInserted);
+		printf("\033[%d;%dH%i\n", 0, 0, isInserted);
 
 		// Flush and swap framebuffers
 		gfxFlushBuffers();
@@ -47,6 +107,7 @@ int main()
 
 	// Exit services
 	hbExit();
+	sdmcExit();
 	fsExit();
 	gfxExit();
 	hidExit();
@@ -55,6 +116,94 @@ int main()
 	
 	// Return to hbmenu
 	return 0;
+}
+
+void fs_chdir(const char* s) {
+    char buffer[256];
+    fs_relativePath(buffer, s);
+
+    if (dir.handle != 0)
+        FSDIR_Close(dir.handle);
+
+    Result res = FSUSER_OpenDirectory(NULL, &dir.handle, saveArchive,
+            FS_makePath(PATH_CHAR, buffer));
+
+    if (res) {
+        FSUSER_OpenDirectory(NULL, &dir.handle, saveArchive,
+                FS_makePath(PATH_CHAR, fs_cwd));
+        return;
+    }
+
+    strcpy(fs_cwd, buffer);
+}
+
+void fs_relativePath(char* dest, const char* src) {
+    bool back = false;
+    if (strcmp(src, "..") == 0 || strcmp(src, "../") == 0) {
+        if (dest != fs_cwd)
+            strcpy(dest, fs_cwd);
+        back = true;
+    }
+    else if (src[0] == '/')
+        strcpy(dest, src);
+    else {
+        if (dest != fs_cwd)
+            strcpy(dest, fs_cwd);
+        if (dest[strlen(dest)-1] != '/')
+            strcat(dest, "/");
+        strcat(dest, src);
+    }
+
+    while (strlen(dest) > 1 &&
+            strrchr(dest, '/') != 0 && strrchr(dest, '/') == dest+strlen(dest)-1)
+        *strrchr(dest, '/') = '\0';
+
+    if (back) {
+        if (strrchr(dest, '/') != 0) {
+            *(strrchr(dest, '/')) = '\0';
+            if (strcmp(dest, "") == 0)
+                strcpy(dest, "/");
+        }
+    }
+}
+
+char* fs_getfilelist(int *nfiles)
+{
+	FS_path dirPath = (FS_path){PATH_CHAR, 6, (u8*)"/"};
+	FS_dirent entry;
+	int i;
+	
+	FSUSER_OpenDirectory(NULL, &dir.handle, saveArchive, dirPath);
+	*nfiles = 0;
+	for (;;)
+	{
+		u32 nread = 0;
+		FSDIR_Read(dir.handle, &nread, 1, &entry);
+		if (!nread) break;
+		//if (!IsGoodFile(&entry)) continue;
+		*nfiles++;
+	}
+	FSDIR_Close(dir.handle);
+
+	char *filelist = (char*)linearAlloc(0x106 * (*nfiles));
+	
+	// TODO: find out how to rewind it rather than reopening it?
+	FSUSER_OpenDirectory(NULL, &dir.handle, saveArchive, dirPath);
+	i = 0;
+	for (;;)
+	{
+		u32 nread = 0;
+		FSDIR_Read(dir.handle, &nread, 1, &entry);
+		if (!nread) break;
+		//if (!IsGoodFile(&entry)) continue;
+		
+		// dirty way to copy an Unicode string
+		strncpy(&filelist[0x106 * i], entry.name, 0x105);
+		i++;
+	}
+	FSDIR_Close(dir.handle);
+	//filelist[0] = "l";
+	return filelist;
 }
 
 int (*IFile_Open)(void *this, const short *path, int flags) = 0x0022FE08;
@@ -105,46 +254,68 @@ arm11_kernel_exploit_setup (void)
     int (*nop_func)(void);
     int *ipc_buf;
     int model;
+    unsigned char isN3DS = 0;
 
     // get proper patch address for our kernel -- thanks yifanlu once again
     unsigned int kversion = *(unsigned int *)0x1FF80000; // KERNEL_VERSION register
+    APT_CheckNew3DS(NULL, &isN3DS);
+
+    if(!isN3DS)
+    {
     
-    if (kversion == 0x02220000) // 2.34-0 4.1.0
-    {
-        patch_addr = 0xEFF83C97;
-    }
-    else if (kversion == 0x02230600) // 2.35-6 5.0.0
-    {
-        patch_addr = 0xEFF8372F;
-    }
-    else if (kversion == 0x02240000) // 2.36-0 5.1.0
-    {
-        patch_addr = 0xEFF8372B;
-    }
-    else if (kversion == 0x02250000) // 2.37-0 6.0.0
-    {
-        patch_addr = 0xEFF8372B;
-    }
-    else if (kversion == 0x02260000) // 2.38-0 6.1.0
-    {
-        patch_addr = 0xEFF8372B;
-    }
-    else if (kversion == 0x02270400) // 2.39-4 7.0.0
-    {
-        patch_addr = 0xEFF8372F;
-    }
-    else if (kversion == 0x02280000) // 2.40-0 7.2.0
-    {
-        patch_addr = 0xEFF8372B;
-    }
-    else if (kversion == 0x022C0600) // 2.44-6 8.0.0
-    {
-        patch_addr = 0xDFF83837;
+        if (kversion == 0x02220000) // 2.34-0 4.1.0
+        {
+            patch_addr = 0xEFF83C97;
+        }
+        else if (kversion == 0x02230600) // 2.35-6 5.0.0
+        {
+            patch_addr = 0xEFF8372F;
+        }
+        else if (kversion == 0x02240000) // 2.36-0 5.1.0
+        {
+            patch_addr = 0xEFF8372B;
+        }
+        else if (kversion == 0x02250000) // 2.37-0 6.0.0
+        {
+            patch_addr = 0xEFF8372B;
+        }
+        else if (kversion == 0x02260000) // 2.38-0 6.1.0
+        {
+            patch_addr = 0xEFF8372B;
+        }
+        else if (kversion == 0x02270400) // 2.39-4 7.0.0
+        {
+            patch_addr = 0xEFF8372F;
+        }
+        else if (kversion == 0x02280000) // 2.40-0 7.2.0
+        {
+            patch_addr = 0xEFF8372B;
+        }
+        else if (kversion == 0x022C0600) // 2.44-6 8.0.0
+        {
+            patch_addr = 0xDFF83837;
+        }
+        else if (kversion = 0x022E0000) // 2.26-0 9.0.0
+        {
+            patch_addr = 0xDFF83837;
+        }
+        else
+        {
+            printf("Unrecognized kernel version %x, returning...\n", kversion);
+            return 0;
+        }
     }
     else
     {
-        printf("Unrecognized kernel version %x, returning...\n", kversion);
-        return 0;
+        if (kversion = 0x022E0000) // 2.26-0 N3DS 9.0.0
+        {
+            patch_addr = 0xDFF8382F;
+        }
+        else
+        {
+            printf("Unrecognized kernel version %x, returning...\n", kversion);
+            return 0;
+        }
     }
 
     printf("Loaded adr %x for kernel %x\n", patch_addr, kversion); 
@@ -246,17 +417,15 @@ invalidate_allcache (void)
 int __attribute__((noinline))
 arm11_kernel_exec (void)
 {
-    *(int *)0x20046500 = 0xF00FF00F;
-    *(int *)0x20046504 = 0xF00FF00F;
-    *(int *)0x20410000 = 0xF00FF00F;
+    *(int *)0x14410000 = 0xF00FF00F;
 
     // fix up memory
-    *(int *)0xEFF83C9F = 0x8DD00CE5;
+    *(int *)0xDFF8382F = 0x8DD00CE5;
     invalidate_icache ();
     invalidate_allcache ();
-    memcpy(0xD848F000, 0xFFF00000, 0x00038400);
-    memcpy(0xD84C7800, 0xFFF00000, 0x00038400);
-    memcpy(0xE4410000, 0xFFFF0000, 0x1000);
+    //memcpy(0xD848F000, 0xFFF00000, 0x00038400);
+    //memcpy(0xD84C7800, 0xFFF00000, 0x00038400);
+    //memcpy(0xE4410000, 0xFFFF0000, 0x1000);
     invalidate_dcache ();
 
     return 0;

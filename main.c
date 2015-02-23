@@ -389,6 +389,18 @@ arm11_kernel_exploit_exec (int (*func)(void))
              "bx lr\t\n");
 }
 
+int __attribute__((naked))
+arm11_kernel_execute(int (*func)(void))
+{
+    __asm__ ("svc #0x7B\t\n"
+             "bx lr\t\n");
+}
+
+void test(void)
+{
+	*(int *)0x14410000 = 0xFAAFFAAF;
+}
+
 void
 invalidate_icache (void)
 {
@@ -421,6 +433,10 @@ arm11_kernel_exec (void)
 
     // fix up memory
     *(int *)0xDFF8382F = 0x8DD00CE5;
+
+    // give us access to all SVCs (including 0x7B, so we can return to kernel mode) 
+    // THIS OFFSET IS SPECIFIC TO N3DS
+    *(int *)0xDFF82260 = 0xE320F000; //NOP
     invalidate_icache ();
     invalidate_allcache ();
     //memcpy(0xD848F000, 0xFFF00000, 0x00038400);
@@ -487,6 +503,10 @@ int uvl_entry ()
         printf("Kernel exploit set up, \nExecuting code under ARM11 Kernel...\n");
         printf("%x\n", buf[0]);
         arm11_kernel_exploit_exec (arm11_kernel_stub);
+        svcSleepThread (0x400000LL);
+        printf("%x\n", buf[0]);
+        arm11_kernel_execute (test);
+        svcSleepThread (0x400000LL);
         printf("%x\n", buf[0]);
         printf("ARM11 Kernel Code Executed\n");
     }

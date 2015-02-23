@@ -40,7 +40,7 @@ int main()
 		}
 
 		consoleClear();
-		printf("%x ", *(int *)0x14410000);
+		printf("%x ", arm11_buffer[0]);
 
 		// Flush and swap framebuffers
 		gfxFlushBuffers();

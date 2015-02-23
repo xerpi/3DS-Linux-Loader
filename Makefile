@@ -31,8 +31,8 @@ BUILD		        :=	build
 SOURCES		      := .. ../arm .
 DATA		        :=	data
 INCLUDES	      :=	include
-APP_TITLE       :=  CitrAGB (gpsp)
-APP_DESCRIPTION :=  3DS GBA Emulator
+APP_TITLE       :=  Bootstrap
+APP_DESCRIPTION :=  ARM11 Kernel Code Execution
 APP_AUTHOR      :=  Shiny Quagsire
 ICON            :=  logo.png
 

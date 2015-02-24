@@ -66,7 +66,7 @@ int arm11_kernel_exploit_setup(void)
         {
             patch_addr = 0xEFF8372B;
         }
-        else if (kversion == 0x022C0600 || kversion = 0x022E0000) // 2.44-6 8.0.0, 2.26-0 9.0.0
+        else if (kversion == 0x022C0600 || kversion == 0x022E0000) // 2.44-6 8.0.0, 2.26-0 9.0.0
         {
             patch_addr = 0xDFF83837;
         }
@@ -80,7 +80,7 @@ int arm11_kernel_exploit_setup(void)
     }
     else
     {
-        else if (kversion == 0x022C0600 || kversion = 0x022E0000) // N3DS 2.44-6 8.0.0, N3DS 2.26-0 9.0.0
+        if (kversion == 0x022C0600 || kversion == 0x022E0000) // N3DS 2.44-6 8.0.0, N3DS 2.26-0 9.0.0
         {
             patch_addr = 0xDFF8382F;
         }

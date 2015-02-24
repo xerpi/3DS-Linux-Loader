@@ -52,6 +52,7 @@ int arm11_kernel_exploit_setup(void)
         if (kversion == 0x02220000) // 2.34-0 4.1.0
         {
             patch_addr = 0xEFF83C97;
+			svc_patch_addr = 0xFFF627CC;
         }
         else if (kversion == 0x02230600) // 2.35-6 5.0.0
         {

@@ -56,18 +56,22 @@ int arm11_kernel_exploit_setup(void)
         else if (kversion == 0x02230600) // 2.35-6 5.0.0
         {
             patch_addr = 0xEFF8372F;
+            svc_patch_addr = 0xDFF822A8;
         }
         else if (kversion == 0x02240000 || kversion == 0x02250000 || kversion == 0x02260000) // 2.36-0 5.1.0, 2.37-0 6.0.0, 2.38-0 6.1.0
         {
             patch_addr = 0xEFF8372B;
+            svc_patch_addr = 0xDFF822A4;
         }
         else if (kversion == 0x02270400) // 2.39-4 7.0.0
         {
             patch_addr = 0xEFF8372F;
+            svc_patch_addr = 0xDFF822A8;
         }
         else if (kversion == 0x02280000) // 2.40-0 7.2.0
         {
             patch_addr = 0xEFF8372B;
+            svc_patch_addr = 0xDFF822A4;
         }
         else if (kversion == 0x022C0600 || kversion == 0x022E0000) // 2.44-6 8.0.0, 2.26-0 9.0.0
         {

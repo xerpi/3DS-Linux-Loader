@@ -179,32 +179,6 @@ void test(void)
 	arm11_buffer[0] = 0xFAAFFAAF;
 }
 
-void
-invalidate_icache (void)
-{
-	__asm__ ("mcr p15,0,%0,c7,c5,0\t\n"
-			 "mcr p15,0,%0,c7,c5,4\t\n"
-			 "mcr p15,0,%0,c7,c5,6\t\n"
-			 "mcr p15,0,%0,c7,c10,4\t\n" :: "r" (0));
-}
-
-void
-invalidate_dcache (void)
-{
-	__asm__ ("mcr p15,0,%0,c7,c14,0\t\n"
-			 "mcr p15,0,%0,c7,c10,4\t\n" :: "r" (0));
-}
-
-void
-invalidate_allcache (void)
-{
-	__asm__ ("mcr p15,0,%0,c8,c5,0\t\n"
-			 "mcr p15,0,%0,c8,c6,0\t\n"
-			 "mcr p15,0,%0,c8,c7,0\t\n"
-			 "mcr p15,0,%0,c7,c10,4\t\n" :: "r" (0));
-}
-
-int __attribute__((noinline))
 arm11_kernel_exec (void)
 {
 	arm11_buffer[0] = 0xF00FF00F;
@@ -220,9 +194,8 @@ arm11_kernel_exec (void)
 		*(int *)(svc_patch_addr+8) = 0xE320F000; //NOP
 		patched_svc = 1;
 	}
-	invalidate_icache ();
-	invalidate_allcache ();
-	invalidate_dcache ();
+	InvalidateEntireInstructionCache();
+	InvalidateEntireDataCache();
 
 	return 0;
 }
@@ -282,8 +255,13 @@ int doARM11Hax()
 #endif
 
 		arm11_kernel_exploit_exec (arm11_kernel_stub);
-		if(patched_svc > 0)
+		if(patched_svc > 0 && kversion != 0x02220000)
+		{
+#ifdef DEBUG_PROCESS
+			printf("Testing SVC 0x7B\n");
+#endif
 			arm11_kernel_execute (test);
+		}
 
 #ifdef DEBUG_PROCESS
 		printf("ARM11 Kernel Code Executed\n");

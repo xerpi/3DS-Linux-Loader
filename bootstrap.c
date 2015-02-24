@@ -203,7 +203,10 @@ arm11_kernel_exec (void)
     // give us access to all SVCs (including 0x7B, so we can return to kernel mode) 
     // THIS OFFSET IS SPECIFIC TO N3DS
     if(svc_patch_addr > 0)
+    {
         *(int *)(svc_patch_addr) = 0xE320F000; //NOP
+        *(int *)(svc_patch_addr+8) = 0xE320F000; //NOP
+    }
     invalidate_icache ();
     invalidate_allcache ();
     invalidate_dcache ();

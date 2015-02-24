@@ -184,7 +184,7 @@ arm11_kernel_exec (void)
 	arm11_buffer[0] = 0xF00FF00F;
 
 	// fix up memory
-	*(int *)(patch_addr+2) = 0x8DD00CE5;
+	*(int *)(patch_addr+8) = 0x8DD00CE5;
 
 	// give us access to all SVCs (including 0x7B, so we can return to kernel mode) 
 	// THIS OFFSET IS SPECIFIC TO N3DS

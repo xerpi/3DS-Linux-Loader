@@ -8,6 +8,7 @@
 u32 nop_slide[0x1000] __attribute__((aligned(0x1000)));
 unsigned int patch_addr;
 unsigned int svc_patch_addr;
+unsigned char patched_svc = 0;
 unsigned int kversion;
 u8 isN3DS = 0;
 u32 *backup;
@@ -211,6 +212,7 @@ arm11_kernel_exec (void)
 	{
 		*(int *)(svc_patch_addr) = 0xE320F000; //NOP
 		*(int *)(svc_patch_addr+8) = 0xE320F000; //NOP
+		patched_svc = 1;
 	}
 	invalidate_icache ();
 	invalidate_allcache ();
@@ -275,7 +277,7 @@ int doARM11Hax()
 #endif
 
 		arm11_kernel_exploit_exec (arm11_kernel_stub);
-		if(svc_patch_addr > 0)
+		if(patched_svc > 0)
 			arm11_kernel_execute (test);
 
 #ifdef DEBUG_PROCESS

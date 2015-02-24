@@ -6,6 +6,7 @@
 #include <dirent.h>
 
 u32 nop_slide[0x1000] __attribute__((aligned(0x1000)));
+unsigned int patch_addr;
 u8 isN3DS = 0;
 u32 *backup;
 unsigned int *arm11_buffer;
@@ -31,8 +32,6 @@ int do_gshax_copy(void *dst, void *src, unsigned int len, unsigned int check_val
 
 int arm11_kernel_exploit_setup(void)
 {
-    unsigned int patch_addr;
-
     unsigned int *test;
     int i;
     int (*nop_func)(void);
@@ -54,15 +53,7 @@ int arm11_kernel_exploit_setup(void)
         {
             patch_addr = 0xEFF8372F;
         }
-        else if (kversion == 0x02240000) // 2.36-0 5.1.0
-        {
-            patch_addr = 0xEFF8372B;
-        }
-        else if (kversion == 0x02250000) // 2.37-0 6.0.0
-        {
-            patch_addr = 0xEFF8372B;
-        }
-        else if (kversion == 0x02260000) // 2.38-0 6.1.0
+        else if (kversion == 0x02240000 || kversion == 0x02250000 || kversion == 0x02260000) // 2.36-0 5.1.0, 2.37-0 6.0.0, 2.38-0 6.1.0
         {
             patch_addr = 0xEFF8372B;
         }
@@ -74,11 +65,7 @@ int arm11_kernel_exploit_setup(void)
         {
             patch_addr = 0xEFF8372B;
         }
-        else if (kversion == 0x022C0600) // 2.44-6 8.0.0
-        {
-            patch_addr = 0xDFF83837;
-        }
-        else if (kversion = 0x022E0000) // 2.26-0 9.0.0
+        else if (kversion == 0x022C0600 || kversion = 0x022E0000) // 2.44-6 8.0.0, 2.26-0 9.0.0
         {
             patch_addr = 0xDFF83837;
         }
@@ -92,7 +79,7 @@ int arm11_kernel_exploit_setup(void)
     }
     else
     {
-        if (kversion = 0x022E0000) // 2.26-0 N3DS 9.0.0
+        else if (kversion == 0x022C0600 || kversion = 0x022E0000) // N3DS 2.44-6 8.0.0, N3DS 2.26-0 9.0.0
         {
             patch_addr = 0xDFF8382F;
         }
@@ -205,7 +192,7 @@ arm11_kernel_exec (void)
     arm11_buffer[0] = 0xF00FF00F;
 
     // fix up memory
-    *(int *)0xDFF8382F = 0x8DD00CE5;
+    *(int *)(patch_addr+2) = 0x8DD00CE5;
 
     // give us access to all SVCs (including 0x7B, so we can return to kernel mode) 
     // THIS OFFSET IS SPECIFIC TO N3DS

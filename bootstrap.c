@@ -56,7 +56,7 @@ int arm11_kernel_exploit_setup(void)
 		if (kversion == 0x02220000) // 2.34-0 4.1.0
 		{
 			patch_addr = 0xEFF83C97;
-			svc_patch_addr = 0xEFF627CC;
+			svc_patch_addr = 0xEFF827CC;
 		}
 		else if (kversion == 0x02230600) // 2.35-6 5.0.0
 		{
@@ -187,7 +187,6 @@ arm11_kernel_exec (void)
 	*(int *)(patch_addr+8) = 0x8DD00CE5;
 
 	// give us access to all SVCs (including 0x7B, so we can return to kernel mode) 
-	// THIS OFFSET IS SPECIFIC TO N3DS
 	if(svc_patch_addr > 0)
 	{
 		*(int *)(svc_patch_addr) = 0xE320F000; //NOP
@@ -255,7 +254,7 @@ int doARM11Hax()
 #endif
 
 		arm11_kernel_exploit_exec (arm11_kernel_stub);
-		if(patched_svc > 0 && kversion != 0x02220000)
+		if(patched_svc > 0)
 		{
 #ifdef DEBUG_PROCESS
 			printf("Testing SVC 0x7B\n");

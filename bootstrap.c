@@ -7,6 +7,7 @@
 
 u32 nop_slide[0x1000] __attribute__((aligned(0x1000)));
 unsigned int patch_addr;
+unsigned int kversion;
 u8 isN3DS = 0;
 u32 *backup;
 unsigned int *arm11_buffer;
@@ -39,7 +40,7 @@ int arm11_kernel_exploit_setup(void)
     int model;
 
     // get proper patch address for our kernel -- thanks yifanlu once again
-    unsigned int kversion = *(unsigned int *)0x1FF80000; // KERNEL_VERSION register
+    kversion = *(unsigned int *)0x1FF80000; // KERNEL_VERSION register
     APT_CheckNew3DS(NULL, &isN3DS);
 
     if(!isN3DS)
@@ -196,7 +197,8 @@ arm11_kernel_exec (void)
 
     // give us access to all SVCs (including 0x7B, so we can return to kernel mode) 
     // THIS OFFSET IS SPECIFIC TO N3DS
-    *(int *)0xDFF82260 = 0xE320F000; //NOP
+    if(isN3DS)
+        *(int *)0xDFF82260 = 0xE320F000; //NOP
     invalidate_icache ();
     invalidate_allcache ();
     invalidate_dcache ();
@@ -260,7 +262,8 @@ int doARM11Hax()
 #endif
 
         arm11_kernel_exploit_exec (arm11_kernel_stub);
-        arm11_kernel_execute (test);
+        if(isN3DS)
+            arm11_kernel_execute (test);
 
 #ifdef DEBUG_PROCESS
         printf("ARM11 Kernel Code Executed\n");

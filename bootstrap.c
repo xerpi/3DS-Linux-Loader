@@ -50,7 +50,7 @@ int arm11_kernel_exploit_setup(void)
 	svc_patch_addr = 0;
 	APT_CheckNew3DS(NULL, &isN3DS);
 
-	if(!isN3DS)
+	if(!isN3DS || kversion < 0x022C0600)
 	{
 	
 		if (kversion == 0x02220000) // 2.34-0 4.1.0
@@ -101,7 +101,7 @@ int arm11_kernel_exploit_setup(void)
 		else
 		{
 #ifdef DEBUG_PROCESS
-			printf("Unrecognized kernel version %x, returning...\n", kversion);
+			printf("Unrecognized kernel version %x, returning... %i\n", kversion);
 #endif
 			return 0;
 		}

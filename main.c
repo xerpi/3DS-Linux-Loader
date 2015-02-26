@@ -6,24 +6,7 @@
 #include <dirent.h>
 #include "bootstrap.h"
 
-int main()
-{
-	// Initialize services
-	srvInit();			// mandatory
-	aptInit();			// mandatory
-	hidInit(NULL);	// input (buttons, screen)
-	gfxInitDefault();			// graphics
-	fsInit();
-	sdmcInit();
-	hbInit();
-	
-	qtmInit();
-	consoleInit(GFX_BOTTOM, NULL);
-
-	doARM11Hax();
-
-	consoleClear();
-
+void waitKey() {
 	while (aptMainLoop())
 	{
 		// Wait next screen refresh
@@ -39,13 +22,34 @@ int main()
 			break;
 		}
 
-		consoleClear();
-		printf("%x ", arm11_buffer[0]);
-
 		// Flush and swap framebuffers
 		gfxFlushBuffers();
 		gfxSwapBuffers();
 	}
+}
+
+int main()
+{
+	// Initialize services
+	srvInit();			// mandatory
+	aptInit();			// mandatory
+	hidInit(NULL);	// input (buttons, screen)
+	gfxInitDefault();			// graphics
+	fsInit();
+	sdmcInit();
+	hbInit();
+
+	qtmInit();
+	consoleInit(GFX_BOTTOM, NULL);
+
+	doARM11Hax();
+
+	//consoleClear();
+	printf("%x\n", arm11_buffer[0]);
+
+	waitKey();
+
+	printf("Exiting...\n");
 
 	// Exit services
 	hbExit();

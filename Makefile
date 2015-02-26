@@ -26,15 +26,14 @@ include $(DEVKITARM)/3ds_rules
 #     - icon.png
 #     - <libctru folder>/default_icon.png
 #---------------------------------------------------------------------------------
-TARGET		      :=	$(notdir $(CURDIR))
-BUILD		        :=	build
-SOURCES		      := .. ../arm .
-DATA		        :=	data
-INCLUDES	      :=	include
-APP_TITLE       :=  Bootstrap
-APP_DESCRIPTION :=  ARM11 Kernel Code Execution
-APP_AUTHOR      :=  Shiny Quagsire
-ICON            :=  logo.png
+TARGET		:=	$(notdir $(CURDIR))
+BUILD		:=	build
+SOURCES		:=	.
+DATA		:=	data
+INCLUDES	:=	include
+APP_TITLE	:=	Bootstrap
+APP_DESCRIPTION :=	ARM11 Kernel Code Execution
+APP_AUTHOR	:=	Shiny Quagsire
 
 #---------------------------------------------------------------------------------
 # options for code generation

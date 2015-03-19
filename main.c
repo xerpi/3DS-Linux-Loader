@@ -17,8 +17,8 @@ void waitKey() {
 		u32 kDown = hidKeysDown();
 		u32 kHeld = hidKeysHeld();
 		
-		// If START is pressed, break loop and quit
-		if (kDown & KEY_X){
+		// If B is pressed, break loop and quit
+		if (kDown & KEY_B){
 			break;
 		}
 
@@ -42,10 +42,14 @@ int main()
 	qtmInit();
 	consoleInit(GFX_BOTTOM, NULL);
 
-	doARM11Hax();
+	svcSleepThread(1000000000);
 
-	//consoleClear();
-	printf("%x\n", arm11_buffer[0]);
+	run_exploit();
+
+	svcSleepThread(1000000000);
+
+	//consoleClear();	                     
+	printf("\nPress [B] to return to launcher\n");
 
 	waitKey();
 

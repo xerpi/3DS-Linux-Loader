@@ -248,12 +248,12 @@ void exploit_arm9_race_condition()
 	extern u32 arm11_globals_end[];
 	extern u32 arm9_start[];
 	extern u32 arm9_end[];
-	//extern int _KernelSetState(int, int, int, int);
+
 	int (* const _KernelSetState)(int, int, int, int) = (void *)va_kernelsetstate;
 	
 	asm volatile ("clrex");
 
-	/* copy arm11 payload to to lower, writable mirror of
+	/* copy arm11 payload to lower, writable mirror of
 	   mapped exception handlers*/
 	dst = (u32 *)(va_exc_handler_base_W + offs_exc_handler_unused);
 	for (src = arm11_start; src != arm11_end;) {
@@ -264,15 +264,15 @@ void exploit_arm9_race_condition()
 
 	/* copy firmware- and console specific data */
 	dst = (u32 *)(va_exc_handler_base_W + 
-					offs_exc_handler_unused +
-					((arm11_end-arm11_start)<<2));
+	              offs_exc_handler_unused +
+	              ((arm11_end-arm11_start)<<2));
 	for (src = &sd; src != &sd + sizeof(sd) / sizeof(u32);) {
 		*dst = *src;
 		dst++;
 		src++;		
 	}
 
-	/* copy arm9 payload to to FCRAM */
+	/* copy arm9 payload to FCRAM */
 	dst = (u32 *)(va_fcram_base + offs_fcram_arm9_payload);
 	for(src = arm9_start; src != arm9_end;) {
 		*dst = *src;
@@ -282,12 +282,12 @@ void exploit_arm9_race_condition()
 
 	// patch arm11 kernel	 
 	redirect_codeflow(va_patch_hook1,
-						va_exc_handler_base_X +
-						offs_exc_handler_unused);
-						
+	                  va_exc_handler_base_X +
+	                  offs_exc_handler_unused);
+
 	redirect_codeflow(va_patch_hook2,
-						pa_exc_handler_base +
-						offs_exc_handler_unused + 4);
+	                  pa_exc_handler_base +
+	                  offs_exc_handler_unused + 4);
 	
 	CleanEntireDataCache();
 	InvalidateEntireInstructionCache();

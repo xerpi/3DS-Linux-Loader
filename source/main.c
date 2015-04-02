@@ -31,10 +31,10 @@ void waitKey() {
 int main()
 {
 	// Initialize services
-	srvInit();			// mandatory
-	aptInit();			// mandatory
-	hidInit(NULL);	// input (buttons, screen)
-	gfxInitDefault();			// graphics
+	srvInit();
+	aptInit();
+	hidInit(NULL);
+	gfxInitDefault();
 	fsInit();
 	sdmcInit();
 	hbInit();

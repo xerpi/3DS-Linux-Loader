@@ -1,2 +1,39 @@
-credits to everybody who's been working on this thing lately.
-also, a huge thank you to everybody who's been helpful during the 'development' of this thing. you know who you are.
+Privilege elevation exploit for the New Nintendo 3DS.
+
+This privilege elevation exploit is based on reverse engineered code
+of a publicly available, commercial exploit. With existing user mode
+code execution privileges (e.g. Ninjhax), it can be used to further
+elevate privileges to ARM9 pre-kernel.
+
+Currently supported / tested:
+- N3DS XL, FW 9.0.0.20E
+
+Credits:
+- To 3dbrew.org for being such a great resource
+- To whomever initially found the vulnerabilities and wrote the publicly
+  available exploit code
+- To everybody who's been working on porting this exploit to newer firmware
+  versions
+
+How to build:
+- Install and configure devkitarm
+  (http://sourceforge.net/projects/devkitpro/files/devkitARM/)
+- Open a shell and run make
+
+How to use:
+- Run the resulting bootstrap.3dsx (from Homebrew Menu) 
+- By default, the exploit will attempt to gain ARM11 kernel privileges before
+  finally gaining ARM9 pre-kernel privileges (by performing a "firmlaunch").
+  The ARM9 code that is run by the exploit delays normal execution before it
+  eventually resumes loading the stock firmware. This default payload serves
+  demonstration purposes only. The standard proof-of-concept payload may be
+  replaced by putting the file 'arm9payload.bin' into the root folder of your
+  SD-card. This file must consist of valid ARM9 executable code that will be
+  mapped to physical address 0x23F00000 during run-time. The code should begin
+  with a branch instruction at offset 0 and a 'placeholder' for a u32
+  variable at offset 4, which will be filled by the exploit with a backup of
+  the original ARM9 entry point of the FIRM header during runtime.
+  The 'bootstrap' branch of archshift's Decrypt9 tool is one example of an
+  ARM9 payload that can be launched using this exploit. You can get it at:
+  https://github.com/archshift/Decrypt9/tree/bootstrap
+

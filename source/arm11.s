@@ -3,67 +3,6 @@
 .code 32
 .text
 
-.global InvalidateEntireInstructionCache
-.type InvalidateEntireInstructionCache, %function
-InvalidateEntireInstructionCache:
-	mov r0, #0
-	mcr p15, 0, r0, c7, c5, 0
-	bx lr
-
-.global CleanEntireDataCache
-.type CleanEntireDataCache, %function
-CleanEntireDataCache:
-	mov r0, #0
-	mcr p15, 0, r0, c7, c10, 0
-	bx lr
-
-.global DisableInterrupts
-.type DisableInterrupts, %function
-DisableInterrupts:
-	mrs r0, cpsr
-	CPSID I
-	bx lr
-	
-.global EnableInterrupts
-.type EnableInterrupts, %function
-EnableInterrupts:
-	msr cpsr_cx, r0
-	bx lr
-
-.global arm9_start
-@ insert your funky stuff here
-arm9_start:
-	b skipvars
-
-	@ offs 4
-	pa_entrypoint_backup: .long 0
-	
-skipvars:
-	stmfd sp!, {r0-r12,lr}
-
-	@ delay execution. just for "fun"
-	mov r1, #0x10
-outer:
-	
-	mov r0, #0
-	add r0, r0, #0xFFFFFFFF
-inner:
-	subs r0, r0, #1
-	nop
-	bgt inner
-	subs r1, r1, #1
-	bgt outer
-
-	ldmfd sp!, {r0-r12,lr}
-	
-	ldr pc, pa_entrypoint_backup
-	
-	
-.global arm9_end
-arm9_end:
-
-
-
 .global	arm11_start
 arm11_start:
 	b hook1
@@ -72,8 +11,6 @@ arm11_start:
 hook1:
 	stmfd sp!, {r0-r12,lr}
 
-	bl fillscreen
-		
 	mov r0, #1000
 	bl busy_spin
 
@@ -103,9 +40,9 @@ hook1:
 
 	ldmfd sp!, {r0-r12,lr}
 
-	ldr	r0, var_44836
-	str	r0, [r1]
-	ldr	pc, va_hook1_ret
+	ldr r0, var_44836
+	str r0, [r1]
+	ldr pc, va_hook1_ret
 
 	var_44836: .long 0x44836
 
@@ -144,12 +81,12 @@ wait_arm9_loop:
 	@ get arm9 orig entry point phys addr from FIRM header
 	ldr r0, [r10, #0x0C]
 
-	@ backup orig entry point to FCRAM + offset 4
+	@ backup orig entry point to FCRAM + offs arm9 payload + 4
 	str r0, [r9, #0x4]
 
 	@ overwrite orig entry point with FCRAM addr
 	@ this exploits the race condition bug
-	str	r9, [r10, #0x0C] 	
+	str r9, [r10, #0x0C] 	
 
 	ldr r0, pa_arm11_code
 wait_arm11_loop:
@@ -198,7 +135,7 @@ locret_FFFF0AC0:
 busy_spin:
 	subs r0, r0, #2
 	nop
-	bgt	busy_spin
+	bgt busy_spin
 	bx lr 
 
 pdn_send:
@@ -231,43 +168,6 @@ pxi_sync:
 	STRB            R1, [R0,#3]
 	BX              LR
 
-.global plot_pixel
-.type plot_pixel, %function
-@ input: r0 = pixel number
-@        r1 = color (rgb)
-plot_pixel:
-	ldr r2, va_fb
-	strb r1, [r2, r0]
-	bx lr
-
-fillscreen:
-	push {r3, r4, r5, r6, lr}
-	
-	mov r4, #0xFF @ color
-	mov r5, #0 @ pixel num
-	ldr r6, max
-	mov r1, r4
-
-next_pxl:
-	mov r0, r5
-	bl plot_pixel
-
-	add r5, #1
-	cmp r5, r6
-	bne next_pxl 
-
-	mov r0, #0x1000
-	bl busy_spin
-
-	mov r5, #0 @ reset pixel num
-	sub r4, #1 @ change color
-	mov r1, r4
-	cmp r4, #0
-	bne next_pxl
-	
-	pop {r3, r4, r5, r6, pc}
-	max: .long 0x46500
-
 .global	arm11_end	
 arm11_end:
 
@@ -277,7 +177,6 @@ arm11_globals_start:
 	va_pdn_regs:    .long 0
 	va_pxi_regs:    .long 0
 	va_hook1_ret:   .long 0
-	va_fb:          .long 0
 
 .global arm11_globals_end
 arm11_globals_end:

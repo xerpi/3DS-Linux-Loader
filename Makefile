@@ -28,12 +28,12 @@ include $(DEVKITARM)/3ds_rules
 #---------------------------------------------------------------------------------
 TARGET		:=	$(notdir $(CURDIR))
 BUILD		:=	build
-SOURCES		:=	.
+SOURCES		:=	source
 DATA		:=	data
 INCLUDES	:=	include
 APP_TITLE	:=	Bootstrap
-APP_DESCRIPTION :=	ARM11 Kernel Code Execution
-APP_AUTHOR	:=	Shiny Quagsire
+APP_DESCRIPTION :=	ARM11 and ARM9 Kernel Code Execution
+APP_AUTHOR	:=	Everybody (+dog)
 
 #---------------------------------------------------------------------------------
 # options for code generation

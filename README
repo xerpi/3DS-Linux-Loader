@@ -22,16 +22,20 @@ How to use:
 - Run the resulting bootstrap.3dsx (from Homebrew Menu) 
 - By default, the exploit will attempt to gain ARM11 kernel privileges before
   finally gaining ARM9 pre-kernel privileges (by performing a "firmlaunch").
-  The ARM9 code that is run by the exploit delays normal execution before it
-  eventually resumes loading the stock firmware. This default payload serves
+  
+  The built-in ARM9 payload delays normal execution before it eventually
+  reboots into the stock / sysnand firmware. This default payload serves
   demonstration purposes only. The standard proof-of-concept payload may be
   replaced by putting the file 'arm9payload.bin' into the root folder of your
   SD-card. This file must consist of valid ARM9 executable code that will be
-  mapped to physical address 0x23F00000 during run-time. The code should begin
+  mapped to physical address 0x23F00000 during run-time. Its code should begin
   with a branch instruction at offset 0 and a 'placeholder' for a u32
   variable at offset 4, which will be filled by the exploit with a backup of
   the original ARM9 entry point of the FIRM header during runtime.
+  
   The 'bootstrap' branch of archshift's Decrypt9 tool is one example of an
-  ARM9 payload that can be launched using this exploit. You can get it at:
+  ARM9 payload that can be launched using this exploit (build using 'make',
+  rename the resulting .bin file to arm9payload.bin and place it into the root
+  folder of your SD card). Decrypt9 for bootstrap can be downloaded from
   https://github.com/archshift/Decrypt9/tree/bootstrap
 

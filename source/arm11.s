@@ -64,7 +64,7 @@ hijack_arm9:
 	str r1, [r0]
 	
 	@ load physical addresses
-	ldr r10, pa_firm_ncch
+	ldr r10, pa_firm_header
 	ldr r9, pa_arm9_payload
 	ldr r8, pa_io_mem
 	
@@ -99,7 +99,7 @@ wait_arm11_loop:
 	pa_arm11_code:       .long 0x1FFFFFFC
 	pa_pxi_regs:         .long 0x10163000
 	some_pxi_cmd:        .long 0x44846
-	pa_firm_ncch:        .long 0x24000000
+	pa_firm_header:      .long 0x24000000
 	pa_arm9_payload:     .long 0x23F00000
 	pa_io_mem:           .long 0x10140000
 	.align 4

@@ -1,19 +1,17 @@
-Privilege elevation exploit for the New Nintendo 3DS.
+BRAHMA - Privilege elevation exploit for the Nintendo 3DS.
 
 This privilege elevation exploit is based on reverse engineered code
 of a publicly available, commercial exploit. With existing user mode
 code execution privileges (e.g. Ninjhax), it can be used to further
 elevate privileges to ARM9 pre-kernel.
 
-Currently supported / tested:
-- N3DS XL, FW 9.0.0.20E
-
 Credits:
 - To 3dbrew.org for being such a great resource
 - To whomever initially found the vulnerabilities and wrote the publicly
   available exploit code
-- To everybody who's been working on porting this exploit to newer firmware
-  versions
+- To everybody who's been working on porting this exploit and the various
+  "bootstrap" branches to newer firmware versions and improving its stability
+  (in particular yifanlu, yuriks and shinyquagsire23)
 
 How to build:
 - Install and configure devkitarm

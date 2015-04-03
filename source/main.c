@@ -4,11 +4,10 @@
 #include <string.h>
 #include <malloc.h>
 #include <dirent.h>
-#include "bootstrap.h"
+#include "brahma.h"
 
 void waitKey() {
-	while (aptMainLoop())
-	{
+	while (aptMainLoop()) {
 		// Wait next screen refresh
 		gspWaitForVBlank();
 
@@ -28,8 +27,7 @@ void waitKey() {
 	}
 }
 
-int main()
-{
+int main() {
 	// Initialize services
 	srvInit();
 	aptInit();
@@ -43,17 +41,12 @@ int main()
 	consoleInit(GFX_BOTTOM, NULL);
 
 	svcSleepThread(1000000000);
-
 	run_exploit();
-
 	svcSleepThread(1000000000);
-
-	//consoleClear();	                     
+		                     
 	printf("\nPress [B] to return to launcher\n");
-
 	waitKey();
-
-	printf("Exiting...\n");
+	printf("[+] Exiting...\n");
 
 	// Exit services
 	hbExit();

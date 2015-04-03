@@ -31,7 +31,7 @@ BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data
 INCLUDES	:=	include
-APP_TITLE	:=	Bootstrap
+APP_TITLE	:=	BRAHMA
 APP_DESCRIPTION :=	ARM11 and ARM9 Kernel Code Execution
 APP_AUTHOR	:=	Everybody (+dog)
 

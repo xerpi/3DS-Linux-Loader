@@ -62,7 +62,7 @@ struct exploit_data supported_systems[] = {
 	{
 		0x02220000,
 		SYS_MODEL_OLD_3DS | SYS_MODEL_NEW_3DS,
-		0xEFF83C8F,
+		0xEFF83C9F,
 		0xEFF827CC,
 		0xEFFE4DD4,
 		0xEFFF497C,
@@ -77,7 +77,7 @@ struct exploit_data supported_systems[] = {
 	{
 		0x02230600,
 		SYS_MODEL_OLD_3DS | SYS_MODEL_NEW_3DS,
-		0xEFF83727,
+		0xEFF83737,
 		0xEFF822A8,
 		0xEFFE55BC,
 		0xEFFF4978,
@@ -92,7 +92,7 @@ struct exploit_data supported_systems[] = {
 	{
 		0x022E0000,
 		SYS_MODEL_OLD_3DS,
-		0xDFF8382F,
+		0xDFF8383F,
 		0xDFF82290,
 		0xDFFE59D0,
 		0xDFFF4974,
@@ -107,7 +107,7 @@ struct exploit_data supported_systems[] = {
 	{
 		0x022C0600,
 		SYS_MODEL_OLD_3DS,
-		0xDFF8375F,
+		0xDFF8376F,
 		0xDFF82294,
 		0xDFFE4F28,
 		0xDFFF4974,
@@ -122,7 +122,7 @@ struct exploit_data supported_systems[] = {
 	{
 		0x02280000,
 		SYS_MODEL_OLD_3DS | SYS_MODEL_NEW_3DS,
-		0xEFF83723,
+		0xEFF83733,
 		0xEFF822A4,
 		0xEFFE5B30,
 		0xEFFF4974,
@@ -137,7 +137,7 @@ struct exploit_data supported_systems[] = {
 	{
 		0x02270400,
 		SYS_MODEL_OLD_3DS | SYS_MODEL_NEW_3DS,
-		0xEFF83727,
+		0xEFF83737,
 		0xEFF822A8,
 		0xEFFE5B34,
 		0xEFFF4978,
@@ -152,7 +152,7 @@ struct exploit_data supported_systems[] = {
 	{
 		0x02250000,
 		SYS_MODEL_OLD_3DS | SYS_MODEL_NEW_3DS,
-		0xEFF83723,
+		0xEFF83733,
 		0xEFF822A4,
 		0xEFFE5AE8,
 		0xEFFF4978,
@@ -167,7 +167,7 @@ struct exploit_data supported_systems[] = {
 	{
 		0x02260000,
 		SYS_MODEL_OLD_3DS | SYS_MODEL_NEW_3DS,
-		0xEFF83723,
+		0xEFF83733,
 		0xEFF822A4,
 		0xEFFE5AE8,
 		0xEFFF4978,
@@ -182,7 +182,7 @@ struct exploit_data supported_systems[] = {
 	{
 		0x02240000,
 		SYS_MODEL_OLD_3DS | SYS_MODEL_NEW_3DS,
-		0xEFF83723,
+		0xEFF83733,
 		0xEFF822A4,
 		0xEFFE55B8,
 		0xEFFF4978,

@@ -18,7 +18,9 @@ How to build:
 - Install and configure devkitarm
   (http://sourceforge.net/projects/devkitpro/files/devkitARM/)
 - Open a shell and run make
-
+- Prebuilt binary releases are available at
+  https://github.com/patois/Brahma/releases
+  
 How to use:
 - Run the resulting brahma.3dsx (from Homebrew Menu) 
 - By default, the exploit will attempt to gain ARM11 kernel privileges before

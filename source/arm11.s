@@ -102,8 +102,6 @@ wait_arm11_loop:
 	pa_firm_header:      .long 0x24000000
 	pa_arm9_payload:     .long 0x23F00000
 	pa_io_mem:           .long 0x10140000
-	
-	.align 4
 hijack_arm9_end:
 
 copy_mem:

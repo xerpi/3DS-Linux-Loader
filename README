@@ -1,9 +1,58 @@
 BRAHMA - Privilege elevation exploit for the Nintendo 3DS.
 
-This privilege elevation exploit is based on reverse engineered code
-of a publicly available, commercial exploit. With existing user mode
+WTF is 'BRAHMA'?
+BRAHMA is a privilege elevation exploit that is based on reverse engineered
+code of a publicly available, 'commercial' exploit. With existing user mode
 code execution privileges (e.g. Ninjhax), it can be used to further
 elevate privileges to ARM9 pre-kernel.
+
+Also, "Brahma, the creator" is a god in hinduism that is often portrayed
+with four heads and arms (heh... so funny :\). 
+
+How to build:
+- Download and install devkitARM (http://devkitpro.org/wiki/Getting_Started)
+- Open a shell and run make
+- Prebuilt binary releases are available at
+  https://github.com/patois/Brahma/releases
+
+How to use:
+- Run brahma.3dsx (using homebrew launcher) 
+- By default, the exploit will attempt to gain ARM11 kernel privileges before
+  finally gaining ARM9 pre-kernel privileges (by performing a "firmlaunch").
+
+  There is a built-in ARM9 payload which reboots into the stock / sysnand
+  firmware. This default payload serves demonstration purposes only but may be
+  replaced by loading a custom ARM9 payload interactively. Payload files can be
+  loaded from an SD card. These must be located in a folder named "/brahma" on
+  the 3DS SD card. For quicker development and testing, payload can also be
+  sent to the 3DS over a WiFi network connection (use netcat or client.py that
+  is part of this package).
+  Syntax:
+      'python client.py <3DS ip> <filename>' or 'nc <3DS ip> 80 < <filename>' 
+      Examples (with '10.0.0.5' being the IP address of the 3DS):
+	      - python client.py 10.0.0.5 payload.bin
+	      - nc 10.0.0.5 80 < payload.bin
+
+  In addition, a custom ARM9 payload can also be placed into the root folder of
+  the 3DS' SD-card, which must be named 'arm9payload.bin'. It will automagically
+  be loaded and bootet into if the 'LEFT' button on the directional pad is held
+  during the startup of BRAHMA. This is a potentially dangerous feature, so be
+  sure to know what's on the SD card and who put it there ;)
+
+  ARM9 payload must consist of valid ARM9 executable code and will be
+  mapped to physical address 0x23F00000 during run-time. Its code should begin
+  with a branch instruction at offset 0 and a 'placeholder' for a u32
+  variable at offset 4, which will be filled by BRAHMA with a backup of
+  the original ARM9 entry point of the FIRM header during runtime.
+
+  Example programs that run in privileged ARM9 mode can be downloaded from
+  https://github.com/patois/3DSProjects/tree/master/Brahma/
+
+  The 'bootstrap' branch of archshift's Decrypt9 tool is another example of an
+  ARM9 payload that can be launched using this exploit (use 'make' to build
+  the project, then rename the resulting .bin file to 'arm9payload.bin' and
+  place it into the root folder of the 3DS' SD card). Decrypt9 for bootstrap
+  can be downloaded from https://github.com/archshift/Decrypt9/tree/bootstrap
 
 Credits:
 - To 3dbrew.org and all its contributors for being such a great resource
@@ -14,33 +63,21 @@ Credits:
   (in particular yifanlu, yuriks and shinyquagsire23)
 - To everybody involved in creating libctru, Ninjhax and the Homebrew Menu
 
-How to build:
-- Download and install devkitARM (http://devkitpro.org/wiki/Getting_Started)
-- Open a shell and run make
-- Prebuilt binary releases are available at
-  https://github.com/patois/Brahma/releases
-  
-How to use:
-- Run brahma.3dsx (using homebrew launcher) 
-- By default, the exploit will attempt to gain ARM11 kernel privileges before
-  finally gaining ARM9 pre-kernel privileges (by performing a "firmlaunch").
-  
-  The built-in ARM9 payload delays normal execution before it eventually
-  reboots into the stock / sysnand firmware. This default payload serves
-  demonstration purposes only. The standard proof-of-concept payload may be
-  replaced by putting the file 'arm9payload.bin' into the root folder of your
-  SD-card. This file must consist of valid ARM9 executable code that will be
-  mapped to physical address 0x23F00000 during run-time. Its code should begin
-  with a branch instruction at offset 0 and a 'placeholder' for a u32
-  variable at offset 4, which will be filled by the exploit with a backup of
-  the original ARM9 entry point of the FIRM header during runtime.
-  
-  Example programs that run in privileged ARM9 mode can be downloaded from
-  https://github.com/patois/3DSProjects/tree/master/Brahma/  
-  
-  The 'bootstrap' branch of archshift's Decrypt9 tool is another example of an
-  ARM9 payload that can be launched using this exploit (use 'make' to build
-  the project, then rename the resulting .bin file to 'arm9payload.bin' and
-  place it into the root folder of your 3DS' SD card). Decrypt9 for bootstrap
-  can be downloaded from https://github.com/archshift/Decrypt9/tree/bootstrap
+Disclaimer:
+  The author of this program (patois) can neither be held responsible for wrong
+  nor for correct use of this program, nor does the author guarantee the program
+  to be free of bugs. Although not intended by the author, (software) bugs may
+  eat nerves, hardware and brains. In other words, using this program may cause
+  personal damage or damage to the hardware it is attempted to run on.
 
+  Furthermore, this program and its source code is strictly intended for
+  educational purposes and is exclusively directed at experienced system
+  programmers! The author cannot be held responsible for any misuse.
+
+  Even if you consider your computer skills advanced, please do use this program
+  responsibly and do not attempt to run code from 'untrusted sources', unless
+  you do not care about or fully take the risk of running potentially harmful
+  code that might result in damage of any kind.
+  By using this program, you entirely agree with above conditions.
+
+  (c) 2015, patois

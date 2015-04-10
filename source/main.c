@@ -3,28 +3,47 @@
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
-#include <dirent.h>
 #include "brahma.h"
+#include "hid.h"
+#include "menus.h"
+#include "sochlp.h"
 
-void waitKey() {
+void interact_with_user() {
+	int menuidx = 0;
+	
 	while (aptMainLoop()) {
-		// Wait next screen refresh
 		gspWaitForVBlank();
 
-		// Read which buttons are currently pressed 
-		hidScanInput();
-		u32 kDown = hidKeysDown();
-		u32 kHeld = hidKeysHeld();
+		menuidx = print_main_menu(menuidx, &g_main_menu);		
+
+		u32 kDown = wait_key(); 
 		
-		// If B is pressed, break loop and quit
-		if (kDown & KEY_B){
+		if (kDown & KEY_B) {
 			break;
 		}
-
-		// Flush and swap framebuffers
+		else if (kDown & KEY_A) {
+			consoleClear();
+			printf("\n");
+			if (menu_execute_function(menuidx, &g_main_menu, 0))
+				wait_any_key();
+		}
+		else if (kDown & KEY_UP) {
+			menuidx--;
+		}
+		else if (kDown & KEY_DOWN) {
+			menuidx++;
+		}
 		gfxFlushBuffers();
-		gfxSwapBuffers();
+		gfxSwapBuffers(); 
 	}
+
+	return 0;
+}
+
+int quick_boot_firm(int load_from_disk) {
+	if (load_from_disk)
+		load_arm9_payload("/arm9payload.bin");
+	run_exploit(false);	
 }
 
 int main() {
@@ -36,17 +55,26 @@ int main() {
 	fsInit();
 	sdmcInit();
 	hbInit();
-
 	qtmInit();
+	
 	consoleInit(GFX_BOTTOM, NULL);
 
-	run_exploit();
-		                     
-	printf("\nPress [B] to return to launcher\n");
-	waitKey();
-	printf("[+] Exiting...\n");
+	hidScanInput();
+	u32 kHeld = hidKeysHeld();
+ 
+	if (kHeld & KEY_LEFT) {
+		/* load default payload from dosk and run exploit */
+		quick_boot_firm(1);
+		printf("[!] Quickload failed\n");
+		wait_any_key();
+	} else if (kHeld & KEY_RIGHT) {
+		/* reboot only */
+		quick_boot_firm(0);
+	}
 
-	// Exit services
+	SOCInit();	
+	interact_with_user();
+
 	hbExit();
 	sdmcExit();
 	fsExit();
@@ -54,7 +82,8 @@ int main() {
 	hidExit();
 	aptExit();
 	srvExit();
-	
+	SOCExit();
+
 	// Return to hbmenu
 	return 0;
 }

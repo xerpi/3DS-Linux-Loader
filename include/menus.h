@@ -4,16 +4,17 @@
 
 #define BRAHMADIR "/brahma/"
 
-int print_menu (int idx, struct menu_t *menu);
-int print_file_list (int idx, struct menu_t *menu);
-int print_main_menu(int idx, struct menu_t *menu);
+s32 print_menu (s32 idx, struct menu_t *menu);
+s32 print_file_list (s32 idx, struct menu_t *menu);
+s32 print_main_menu (s32 idx, struct menu_t *menu);
 
-int get_filename(int idx, char *buf, u32 size);
+s32 get_filename (s32 idx, char *buf, u32 size);
 
-int menu_cb_load(int idx, void *param);
-int menu_cb_choose_file(int idx, void *param);
-int menu_cb_run(int idx, void *param);
-int menu_cb_recv(int idx, void *param);
+s32 menu_cb_load (s32 idx, void *param);
+s32 menu_cb_choose_file (s32 idx, void *param);
+s32 menu_cb_run (s32 idx, void *param);
+s32 menu_cb_recv (s32 idx, void *param);
+s32 menu_cb_patch_svc (s32 idx, void *param);
 
 static const struct menu_t g_main_menu = {
 	3,

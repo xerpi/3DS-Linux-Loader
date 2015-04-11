@@ -8,7 +8,8 @@
 arm9_start:
 	B               skipvars
 
-	@ offs 4, to be filled during runtime
+	@ offs 4, will contain backup copy of FIRM ARM9
+	@ entry point so execution can be returned to FIRM
 	pa_arm9_entrypoint_backup: .long 0xFFFF0000
 	
 skipvars:

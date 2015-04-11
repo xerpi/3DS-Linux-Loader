@@ -8,8 +8,8 @@
 #include "menus.h"
 #include "sochlp.h"
 
-void interact_with_user() {
-	int menuidx = 0;
+void interact_with_user (void) {
+	s32 menuidx = 0;
 	
 	while (aptMainLoop()) {
 		gspWaitForVBlank();
@@ -40,13 +40,13 @@ void interact_with_user() {
 	return 0;
 }
 
-int quick_boot_firm(int load_from_disk) {
+s32 quick_boot_firm (s32 load_from_disk) {
 	if (load_from_disk)
 		load_arm9_payload("/arm9payload.bin");
-	run_exploit(false);	
+	firm_reboot();	
 }
 
-int main() {
+s32 main (void) {
 	// Initialize services
 	srvInit();
 	aptInit();
@@ -58,22 +58,29 @@ int main() {
 	qtmInit();
 	
 	consoleInit(GFX_BOTTOM, NULL);
+	if (brahma_init()) {
+		hidScanInput();
+		u32 kHeld = hidKeysHeld();
+	 
+		if (kHeld & KEY_LEFT) {
+			/* load default payload from dosk and run exploit */
+			quick_boot_firm(1);
+			printf("[!] Quickload failed\n");
+			wait_any_key();
+		} else if (kHeld & KEY_RIGHT) {
+			/* reboot only */
+			quick_boot_firm(0);
+		}
+	
+		soc_init();	
+		interact_with_user();
+		soc_exit();
+		brahma_exit();
 
-	hidScanInput();
-	u32 kHeld = hidKeysHeld();
- 
-	if (kHeld & KEY_LEFT) {
-		/* load default payload from dosk and run exploit */
-		quick_boot_firm(1);
-		printf("[!] Quickload failed\n");
+	} else {
+		printf("* BRAHMA *\n\n[!]Not enough memory\n");
 		wait_any_key();
-	} else if (kHeld & KEY_RIGHT) {
-		/* reboot only */
-		quick_boot_firm(0);
 	}
-
-	SOCInit();	
-	interact_with_user();
 
 	hbExit();
 	sdmcExit();
@@ -82,8 +89,6 @@ int main() {
 	hidExit();
 	aptExit();
 	srvExit();
-	SOCExit();
-
 	// Return to hbmenu
 	return 0;
 }

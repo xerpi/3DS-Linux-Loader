@@ -2,10 +2,10 @@
 #include <3ds.h>
 #include "menus.h"
 
-int print_menu (int idx, struct menu_t *menu) {
-	int i;
-	int newidx;
-	int count = menu_get_element_count(menu);
+s32 print_menu (s32 idx, struct menu_t *menu) {
+	s32 i;
+	s32 newidx;
+	s32 count = menu_get_element_count(menu);
 	
 	newidx = menu_update_index(idx, menu);
 
@@ -19,24 +19,23 @@ int print_menu (int idx, struct menu_t *menu) {
 	return newidx;	
 }
 
-int print_file_list (int idx, struct menu_t *menu) {	
-	int i = 0;
-	int newidx;
-   	DIR *dp;
-    struct dirent *entry;
+s32 print_file_list (s32 idx, struct menu_t *menu) {	
+	s32 i = 0;
+	s32 newidx;
+	DIR *dp;
+	struct dirent *entry;
 	char *filename = 0;
-	int totalfiles = 0;
-	int num_printed = 0;
+	s32 totalfiles = 0;
+	s32 num_printed = 0;
 
 	consoleClear();
 
-    printf("ARM9 payloads (%s):\n\n\n", BRAHMADIR);
+	printf("ARM9 payloads (%s):\n\n\n", BRAHMADIR);
 	printf("===========================\n");
 
-	int count = menu_get_element_count(menu);
+	s32 count = menu_get_element_count(menu);
 	
 	newidx = menu_update_index(idx, menu);
-    if((dp = opendir(BRAHMADIR))) {   	
 		for (i=0; i<count; i++) {
 			if ((entry = readdir(dp)) != 0) {
 				filename = entry->d_name;
@@ -49,10 +48,10 @@ int print_file_list (int idx, struct menu_t *menu) {
 			else
 				printf("  %s   %s\n", menu_get_element_name(i, menu), filename);
 		}
-    	closedir(dp);
-    }
-    else {
-    	printf("[!] Could not open '%s'\n", BRAHMADIR);
+		closedir(dp);
+	}
+	else {
+		printf("[!] Could not open '%s'\n", BRAHMADIR);
 	}
 
 	printf("===========================\n\n");
@@ -62,8 +61,8 @@ int print_file_list (int idx, struct menu_t *menu) {
 	return newidx;	
 }
 
-int print_main_menu(int idx, struct menu_t *menu) {
-	int newidx = 0;
+s32 print_main_menu (s32 idx, struct menu_t *menu) {
+	s32 newidx = 0;
 	consoleClear();
 
 	printf("\n* BRAHMA *\n\n\n");
@@ -76,13 +75,13 @@ int print_main_menu(int idx, struct menu_t *menu) {
 	return newidx;
 }
 
-int get_filename(int idx, char *buf, u32 size) {
-   	DIR *dp;
-    struct dirent *entry;
-    int result = 0;
-    int numfiles = 0;
+s32 get_filename (s32 idx, char *buf, u32 size) {
+	DIR *dp;
+	struct dirent *entry;
+	s32 result = 0;
+	s32 numfiles = 0;
 
-    if((dp = opendir(BRAHMADIR)) && buf && size) {   	
+	if((dp = opendir(BRAHMADIR)) && buf && size) {   	
 		while((entry = readdir(dp)) != NULL) {
 			if (numfiles == idx) {
 				snprintf(buf, size-1, "%s%s", BRAHMADIR, entry->d_name);
@@ -91,18 +90,18 @@ int get_filename(int idx, char *buf, u32 size) {
 			}
 			numfiles++;
 		}
-    	closedir(dp);
-    }
-    return result;
+		closedir(dp);
+	}
+	return result;
 }
 
-int menu_cb_recv(int idx, void *param) {
+s32 menu_cb_recv (s32 idx, void *param) {
 	return recv_arm9_payload();
 }
 
-int menu_cb_load(int idx, void *param) {
+s32 menu_cb_load(s32 idx, void *param) {
 	char filename[256];
-	int result = 0;
+	s32 result = 0;
 
 	if (param) {
 		if (get_filename(*(u32 *)param, &filename, sizeof(filename))) {
@@ -113,9 +112,9 @@ int menu_cb_load(int idx, void *param) {
 	return result;
 }
 
-int menu_cb_choose_file(int idx, void *param) {
-	int curidx = idx;
-	int loaded = 0;
+s32 menu_cb_choose_file (s32 idx, void *param) {
+	s32 curidx = idx;
+	s32 loaded = 0;
 
 	while (aptMainLoop()) {
 		gspWaitForVBlank();
@@ -131,6 +130,8 @@ int menu_cb_choose_file(int idx, void *param) {
 			loaded = menu_execute_function(curidx, &g_file_list, &curidx);
 			printf("%s\n", loaded? "[+] Success":"[!] Failure");
 			wait_any_key();
+			if (loaded)
+				break;
 		}
 		else if (kDown & KEY_UP) {
 			curidx--;
@@ -141,16 +142,15 @@ int menu_cb_choose_file(int idx, void *param) {
 		gfxFlushBuffers();
 		gfxSwapBuffers();
 	}
-
 	return 0;
 }
 
-int menu_cb_run(int idx, void *param) {
-	int fail_stage;
-	
+s32 menu_cb_run (s32 idx, void *param) {
+	s32 fail_stage;
+
 	printf("[+] Running ARM9 payload\n");	
-	fail_stage = run_exploit(false);
-	
+	fail_stage = firm_reboot();
+
 	char *msg;
 	switch (fail_stage) {
 		case 1:

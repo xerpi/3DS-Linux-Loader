@@ -1,25 +1,23 @@
 #include <3ds.h>
 #include "sochlp.h"
 
-Result SOCInit() {
-
+u32 soc_init (void) {
 	Result ret;
-
+	u32 result = 0;
+	
 	SOC_buffer = (u32*)memalign(SOC_ALIGN, SOC_BUFFERSIZE);
-	if(SOC_buffer == 0) {
-		return 1;
+	if (SOC_buffer != 0) {
+		ret = SOC_Initialize(SOC_buffer, SOC_BUFFERSIZE);
+		if (ret == 0) {
+			result = 1;
+		} else {
+			free(SOC_buffer);
+		}
 	}
-
-	ret = SOC_Initialize(SOC_buffer, SOC_BUFFERSIZE);
-	if(ret != 0) {
-		free(SOC_buffer);
-		return 1;
-	} 
-
-	return 0;
+	return result;
 }
 
-Result SOCExit() {
+u32 soc_exit (void) {
 	SOC_Shutdown();
 	if (SOC_buffer)
 		free(SOC_buffer);

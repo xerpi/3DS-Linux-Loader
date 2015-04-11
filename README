@@ -1,43 +1,54 @@
-BRAHMA - Privilege elevation exploit for the Nintendo 3DS.
+BRAHMA - Privilege elevation exploit for the Nintendo 3DS
+=========================================================
 
-WTF is 'BRAHMA'?
-BRAHMA is a privilege elevation exploit that is based on reverse engineered
-code of a publicly available, 'commercial' exploit. With existing user mode
-code execution privileges (e.g. Ninjhax), it can be used to further
-elevate privileges to ARM9 pre-kernel.
+  WTF is 'BRAHMA'?
+  ----------------
+  BRAHMA is a privilege elevation exploit that is based on reverse engineered
+  code of a publicly available, 'commercial' exploit. With existing user mode
+  code execution privileges (e.g. Ninjhax), it can be used to further
+  elevate privileges to ARM9 pre-kernel / SVC mode.
 
-Also, "Brahma, the creator" is a god in hinduism that is often portrayed
-with four heads and arms (heh... so funny :\). 
+  Also, "Brahma, the creator" is a god in hinduism that is often portrayed
+  with four heads and arms (heh... so funny :\). 
 
-How to build:
-- Download and install devkitARM (http://devkitpro.org/wiki/Getting_Started)
-- Open a shell and run make
-- Prebuilt binary releases are available at
-  https://github.com/patois/Brahma/releases
+  How to build:
+  -------------
+  - Download and install devkitARM (http://devkitpro.org/wiki/Getting_Started)
+  - Open a shell and run make
+  - Prebuilt binary releases are available at
+    https://github.com/patois/Brahma/releases
 
-How to use:
-- Run brahma.3dsx (using homebrew launcher) 
-- By default, the exploit will attempt to gain ARM11 kernel privileges before
-  finally gaining ARM9 pre-kernel privileges (by performing a "firmlaunch").
+  How to use:
+  -----------
+  - Run brahma.3dsx (using homebrew launcher) 
+  - By default, the exploit will attempt to gain ARM11 kernel privileges before
+    finally gaining ARM9 pre-kernel privileges (by performing a "firmlaunch")
 
-  There is a built-in ARM9 payload which reboots into the stock / sysnand
-  firmware. This default payload serves demonstration purposes only but may be
-  replaced by loading a custom ARM9 payload interactively. Payload files can be
-  loaded from an SD card. These must be located in a folder named "/brahma" on
-  the 3DS SD card. For quicker development and testing, payload can also be
-  sent to the 3DS over a WiFi network connection (use netcat or client.py that
-  is part of this package).
-  Syntax:
-      'python client.py <3DS ip> <filename>' or 'nc <3DS ip> 80 < <filename>' 
-      Examples (with '10.0.0.5' being the IP address of the 3DS):
-	      - python client.py 10.0.0.5 payload.bin
-	      - nc 10.0.0.5 80 < payload.bin
+    "Hotkeys" (press and hold during startup of BRAHMA):
+    ----------------------------------------------------
+    
+    * LEFT  : Loads 'arm9payload.bin' from the root folder of the 3DS' SD card
+              and executes it
+    
+	* RIGHT : Performs a reboot / firm launch of the 3DS system
 
-  In addition, a custom ARM9 payload can also be placed into the root folder of
-  the 3DS' SD-card, which must be named 'arm9payload.bin'. It will automagically
-  be loaded and bootet into if the 'LEFT' button on the directional pad is held
-  during the startup of BRAHMA. This is a potentially dangerous feature, so be
-  sure to know what's on the SD card and who put it there ;)
+    * NONE  : Displays a menu which allows payload files to be received via
+              a WiFi network connection or loaded from the '/brahma' folder
+			  located in the root folder of the SD card
+  
+    In order to send payload files to the 3DS via a network connection,
+    the Python script '/tools/client.py' can be used. Alternatively, netcat
+    does the job as well.
+  
+      Syntax:
+      -------
+      client.py: 'python client.py <3DS ip> <filename>'	  
+	  netcat:    'nc <3DS ip> 80 < <filename>' 
+    
+      Examples:
+	  ---------  
+      client.py: 'python client.py 10.0.0.5 payload.bin'
+	  netcat:    '10.0.0.5 80 < payload.bin'
 
   ARM9 payload must consist of valid ARM9 executable code and will be
   mapped to physical address 0x23F00000 during run-time. Its code should begin
@@ -48,36 +59,32 @@ How to use:
   Example programs that run in privileged ARM9 mode can be downloaded from
   https://github.com/patois/3DSProjects/tree/master/Brahma/
 
-  The 'bootstrap' branch of archshift's Decrypt9 tool is another example of an
+  The 'bootstrap' branch of archshift's Decrypt9 tool is another example of
   ARM9 payload that can be launched using this exploit (use 'make' to build
   the project, then rename the resulting .bin file to 'arm9payload.bin' and
   place it into the root folder of the 3DS' SD card). Decrypt9 for bootstrap
   can be downloaded from https://github.com/archshift/Decrypt9/tree/bootstrap
 
-Credits:
-- To 3dbrew.org and all its contributors for being such a great resource
-- To whomever initially found the vulnerabilities and wrote the publicly
-  available exploit code
-- To everybody who's been working on porting this exploit and its various
-  "bootstrap" branches to newer firmware versions and improving its stability
-  (in particular yifanlu, yuriks and shinyquagsire23)
-- To everybody involved in creating libctru, Ninjhax and the Homebrew Menu
+  Credits:
+  --------
+  - To 3dbrew.org and all its contributors for being such a great resource
+  - To whomever initially found the vulnerabilities and wrote the publicly
+    available exploit code
+  - To everybody who's been working on porting this exploit and its various
+    "bootstrap" branches to newer firmware versions and improving its stability
+    (in particular yifanlu, yuriks and shinyquagsire23)
+  - To everybody involved in creating libctru, Ninjhax and the Homebrew Menu
 
 Disclaimer:
-  The author of this program (patois) can neither be held responsible for wrong
-  nor for correct use of this program, nor does the author guarantee the program
-  to be free of bugs. Although not intended by the author, (software) bugs may
-  eat nerves, hardware and brains. In other words, using this program may cause
-  personal damage or damage to the hardware it is attempted to run on.
-
-  Furthermore, this program and its source code is strictly intended for
-  educational purposes and is exclusively directed at experienced system
-  programmers! The author cannot be held responsible for any misuse.
-
-  Even if you consider your computer skills advanced, please do use this program
-  responsibly and do not attempt to run code from 'untrusted sources', unless
-  you do not care about or fully take the risk of running potentially harmful
-  code that might result in damage of any kind.
-  By using this program, you entirely agree with above conditions.
+THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESSED OR IMPLIED WARRANTIES,
+INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
+FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE REGENTS
+OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING
+IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
+OF SUCH DAMAGE.
 
   (c) 2015, patois

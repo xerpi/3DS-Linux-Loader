@@ -1,6 +1,6 @@
 #pragma once
 
-typedef int menu_func_t(int, void *);
+typedef int menu_func_t (s32, void *);
 
 typedef struct menu_elem_t {
 	const char *name;
@@ -8,13 +8,13 @@ typedef struct menu_elem_t {
 } _menu_elem_t; 
 
 typedef struct menu_t {
-	int element_count;
+	s32 element_count;
 	struct menu_elem_t element[];
 } _menu_t;
 
-int menu_get_element_count (struct menu_t *menu);
-int menu_is_valid_index (int idx, struct menu_t *menu);
-int menu_update_index (int idx, struct menu_t *menu);
-const char *menu_get_element_name (int idx, struct menu_t *menu);
-menu_func_t *menu_get_element_function (int idx, struct menu_t *menu);
-int menu_execute_function (int idx, struct menu_t *menu, void *param);
+s32 menu_get_element_count (struct menu_t *menu);
+s32 menu_is_valid_index (s32 idx, struct menu_t *menu);
+s32 menu_update_index (s32 idx, struct menu_t *menu);
+const char *menu_get_element_name (s32 idx, struct menu_t *menu);
+menu_func_t *menu_get_element_function (s32 idx, struct menu_t *menu);
+s32 menu_execute_function (s32 idx, struct menu_t *menu, void *param);

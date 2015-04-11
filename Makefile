@@ -32,8 +32,8 @@ SOURCES		:=	source
 DATA		:=	data
 INCLUDES	:=	include
 APP_TITLE	:=	BRAHMA
-APP_DESCRIPTION :=	ARM11 and ARM9 Kernel Code Execution
-APP_AUTHOR	:=	Everybody (+dog)
+APP_DESCRIPTION :=	Privileged ARM11/ARM9 Code Execution
+APP_AUTHOR	:=	patois
 
 #---------------------------------------------------------------------------------
 # options for code generation

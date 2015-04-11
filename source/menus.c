@@ -8,14 +8,12 @@ s32 print_menu (s32 idx, struct menu_t *menu) {
 	s32 count = menu_get_element_count(menu);
 	
 	newidx = menu_update_index(idx, menu);
-
 	for (i=0; i<count; i++) {
 		if (newidx == i)
 			printf("[ %s ]\n", menu_get_element_name(i, menu));
 		else
 			printf("  %s  \n", menu_get_element_name(i, menu));
 	}
-	
 	return newidx;	
 }
 
@@ -36,6 +34,7 @@ s32 print_file_list (s32 idx, struct menu_t *menu) {
 	s32 count = menu_get_element_count(menu);
 	
 	newidx = menu_update_index(idx, menu);
+	if((dp = opendir(BRAHMADIR))) {
 		for (i=0; i<count; i++) {
 			if ((entry = readdir(dp)) != 0) {
 				filename = entry->d_name;

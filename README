@@ -26,29 +26,29 @@ BRAHMA - Privilege elevation exploit for the Nintendo 3DS
 
     "Hotkeys" (press and hold during startup of BRAHMA):
     ----------------------------------------------------
-    
+
     * LEFT  : Loads 'arm9payload.bin' from the root folder of the 3DS' SD card
               and executes it
-    
-	* RIGHT : Performs a reboot / firm launch of the 3DS system
+
+    * RIGHT : Performs a reboot / firm launch of the 3DS system
 
     * NONE  : Displays a menu which allows payload files to be received via
               a WiFi network connection or loaded from the '/brahma' folder
-			  located in the root folder of the SD card
-  
+              located in the root folder of the SD card
+
     In order to send payload files to the 3DS via a network connection,
     the Python script '/tools/client.py' can be used. Alternatively, netcat
     does the job as well.
-  
+
       Syntax:
       -------
       client.py: 'python client.py <3DS ip> <filename>'	  
-	  netcat:    'nc <3DS ip> 80 < <filename>' 
-    
+      netcat:    'nc <3DS ip> 80 < <filename>' 
+
       Examples:
-	  ---------  
+      ---------  
       client.py: 'python client.py 10.0.0.5 payload.bin'
-	  netcat:    '10.0.0.5 80 < payload.bin'
+      netcat:    '10.0.0.5 80 < payload.bin'
 
   ARM9 payload must consist of valid ARM9 executable code and will be
   mapped to physical address 0x23F00000 during run-time. Its code should begin

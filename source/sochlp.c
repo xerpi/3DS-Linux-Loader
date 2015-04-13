@@ -18,8 +18,10 @@ u32 soc_init (void) {
 }
 
 u32 soc_exit (void) {
-	SOC_Shutdown();
-	if (SOC_buffer)
+	if (SOC_buffer) {
+		SOC_Shutdown();
 		free(SOC_buffer);
+		SOC_buffer = 0;
+	}
 	return 0;
 }

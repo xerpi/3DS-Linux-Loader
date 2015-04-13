@@ -48,7 +48,7 @@ BRAHMA - Privilege elevation exploit for the Nintendo 3DS
       Examples:
       ---------  
       client.py: 'python client.py 10.0.0.5 payload.bin'
-      netcat:    '10.0.0.5 80 < payload.bin'
+      netcat:    'nc 10.0.0.5 80 < payload.bin'
 
   ARM9 payload must consist of valid ARM9 executable code and will be
   mapped to physical address 0x23F00000 during run-time. Its code should begin
@@ -59,10 +59,9 @@ BRAHMA - Privilege elevation exploit for the Nintendo 3DS
   Example programs that run in privileged ARM9 mode can be downloaded from
   https://github.com/patois/3DSProjects/tree/master/Brahma/
 
-  The 'bootstrap' branch of archshift's Decrypt9 tool is another example of
-  ARM9 payload that can be launched using this exploit (use 'make' to build
-  the project, then rename the resulting .bin file to 'arm9payload.bin' and
-  place it into the root folder of the 3DS' SD card). Decrypt9 for bootstrap
+  There is also a 'bootstrap' port of Decrypt9 by archshift which can be loaded
+  using Brahma (use 'make' to build the project, then use one of the methods
+  supported by Brahma to load the Decrypt9 payload). Decrypt9 for bootstrap
   can be downloaded from https://github.com/archshift/Decrypt9/tree/bootstrap
 
   Credits:

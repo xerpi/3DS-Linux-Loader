@@ -175,6 +175,7 @@ s32 recv_arm9_payload (void) {
 	s32 clientfd;
 	struct sockaddr_in client_addr;
 	s32 addrlen = sizeof(client_addr);
+	s32 sflags = 0;
 		
 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
 		printf("[!] Error: socket()\n");
@@ -203,7 +204,12 @@ s32 recv_arm9_payload (void) {
 	g_ext_arm9_size = 0;
 	g_ext_arm9_loaded = 0;
 
-	fcntl(sockfd, F_SETFL, O_NONBLOCK);
+	sflags = fcntl(sockfd, F_GETFL);
+	if (sflags == -1) {
+		printf("[!] Error: fcntl() (1)\n");
+		close(sockfd);
+	}
+	fcntl(sockfd, F_SETFL, sflags | O_NONBLOCK);
 
 	hidScanInput();
 	old_kDown = hidKeysDown();
@@ -223,7 +229,7 @@ s32 recv_arm9_payload (void) {
 	}
 
 	printf("[x] Connection from %s:%d\n\n", inet_ntoa(client_addr.sin_addr),
-		ntohs(client_addr.sin_port));
+	ntohs(client_addr.sin_port));
 
 	s32 recvd;
 	u32 total = 0;
@@ -240,6 +246,9 @@ s32 recv_arm9_payload (void) {
 			break;
 		}
 	}
+
+	fcntl(sockfd, F_SETFL, sflags & ~O_NONBLOCK);
+
 	printf("\n\n[x] Received %d bytes in total\n", total);
 	g_ext_arm9_size = overflow ? 0 : total;
 	g_ext_arm9_loaded = (g_ext_arm9_size != 0);

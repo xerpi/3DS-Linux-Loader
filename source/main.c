@@ -37,7 +37,7 @@ void interact_with_user (void) {
 		gfxSwapBuffers(); 
 	}
 
-	return 0;
+	return;
 }
 
 s32 quick_boot_firm (s32 load_from_disk) {

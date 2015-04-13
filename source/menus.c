@@ -147,6 +147,11 @@ s32 menu_cb_choose_file (s32 idx, void *param) {
 s32 menu_cb_run (s32 idx, void *param) {
 	s32 fail_stage;
 
+	/* we're kinda screwed if the exploit fails
+	   and soc has been deinitialized. not sure
+	   whether cleaning up here improves existing
+	   problems with using sockets either */
+	soc_exit();
 	printf("[+] Running ARM9 payload\n");	
 	fail_stage = firm_reboot();
 

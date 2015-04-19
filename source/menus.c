@@ -28,7 +28,7 @@ s32 print_file_list (s32 idx, struct menu_t *menu) {
 
 	consoleClear();
 
-	printf("ARM9 payloads (%s):\n\n\n", BRAHMADIR);
+	printf("ARM9 payload (%s):\n\n\n", BRAHMADIR);
 	printf("===========================\n");
 
 	s32 count = menu_get_element_count(menu);

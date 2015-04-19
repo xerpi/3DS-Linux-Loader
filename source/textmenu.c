@@ -18,7 +18,7 @@ s32 menu_update_index (s32 idx, struct menu_t *menu) {
 	s32 newidx = 0;
 	s32 count = menu_get_element_count(menu);
 
-	newidx = idx < 0 ? count-1:idx >= count ? 0:idx;
+	newidx = idx < 0 ? count - 1 : idx >= count ? 0 : idx;
 
 	return newidx;
 }

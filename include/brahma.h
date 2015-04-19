@@ -24,3 +24,8 @@ s32 firm_reboot ();
 static u8  *g_ext_arm9_buf;
 static u32 g_ext_arm9_size = 0;
 static s32 g_ext_arm9_loaded = 0;
+
+extern void *arm11_start;
+extern void *arm11_end;
+extern void *arm9_start;
+extern void *arm9_end;

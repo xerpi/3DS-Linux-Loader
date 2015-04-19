@@ -3,8 +3,10 @@ Brahma - Privilege elevation exploit for the Nintendo 3DS
 
   WTF is 'Brahma'?
   ----------------
-  Brahma is development tool for the Nintendo 3DS platform that is based on
-  two vulnerabilities whose exploitation lead to elevation of privileges.
+  Brahma is a development tool for the Nintendo 3DS platform that enables
+  privileged code execution on the ARM9 processor of the Nintendo 3DS platform.
+  It does so by exploiting two vulnerabilities in order to elevate its
+  privileges.
 
   The exploits utilized by Brahma are based on "commercial" exploits that
   have been reverse engineered. Brahma has been developed with the goal of
@@ -13,8 +15,8 @@ Brahma - Privilege elevation exploit for the Nintendo 3DS
   achieve reliable exploitation and stability.
 
   Brahma comes with full source code that is based on libctru and requires
-  existing user mode code execution privileges (Ninjhax), and can be used to
-  further elevate privileges to ARM9 pre-kernel / SVC mode.
+  existing user mode code execution privileges (Ninjhax), and can then be
+  used to further elevate privileges to ARM9 pre-kernel / SVC mode.
 
   Also, "Brahma, the creator" is a god in hinduism that is often portrayed
   with four heads and arms (heh... so funny :\). 
@@ -23,11 +25,11 @@ Brahma - Privilege elevation exploit for the Nintendo 3DS
   -------------
   - Download and install devkitARM (http://devkitpro.org/wiki/Getting_Started)
   - Open a shell and run make
-  - Prebuilt binary releases are available at
-    https://github.com/patois/Brahma/releases
 
   How to use:
   -----------
+  - Prebuilt binary releases are available at
+    https://github.com/patois/Brahma/releases
   - Run brahma.3dsx (using homebrew launcher) 
   - By default, the exploit will attempt to gain ARM11 kernel privileges before
     finally gaining ARM9 pre-kernel privileges (by performing a "firmlaunch")
@@ -71,24 +73,23 @@ Brahma - Privilege elevation exploit for the Nintendo 3DS
 
   Developers:
   -----------
-  The exploits used by Brahma which enable privileged ARM9 code execution
-  may also be used as a "library" (#include "brahma.h")
+  Brahma and its exploits which enable privileged ARM9 code execution
+  on the Nintendo 3DS may also be used as a "library" (#include "brahma.h")
 
-  - call brahma_init() in order to initialize Brahma
-  - call load_arm9_payload() to load payload binary from disk
-  - call firm_reboot() to execute a payload binary (privileged ARM9 code)
-  - (please check the source code for even more features and options)
+  - call brahma_init() - initializes Brahma
+  - call load_arm9_payload() - loads a payload binary from disk
+  - call firm_reboot() - executes a payload binary (privileged ARM9 code)
+  - (please check the source code for more features and options)
 
   ARM9 payload must consist of valid ARM9 executable code and will be
   mapped to physical address 0x23F00000 during run-time. Its code should begin
   with a branch instruction at offset 0 and a 'placeholder' for a u32
-  variable at offset 4, which will be filled by BRAHMA with a backup of
+  variable at offset 4, which will be filled by Brahma with a backup of
   the original ARM9 entry point of the FIRM header during runtime.
 
   Brahma is written in a way that allows developers of payload binaries
-  to easily return control to the Nintendo firmware after custom payload binary
-  code has been executed - simply by returning from the main() function of its
-  code!
+  to easily return control to the 3DS' firmware by simply returning from
+  the main() function of the payload.
   
   This allows reading and altering of memory contents, such as the mapped
   Nintendo firmware (including ARM9 kernel, Process9, ARM11 kernel and several

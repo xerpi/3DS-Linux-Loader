@@ -283,6 +283,22 @@ s32 load_arm9_payload (char *filename) {
 	return result;
 }
 
+/* reads ARM9 payload from memory.
+   data: array of u8 containing the payload
+   dsize: size of the data array
+   returns: 0 on failure, 1 on success */
+s32 load_arm9_payload_from_mem (u8* data, u32 dsize) {
+	s32 result = 0;
+
+	if ((data != NULL) && (dsize >= 8) && (dsize <= ARM9_PAYLOAD_MAX_SIZE)) {
+		g_ext_arm9_size = dsize;
+		memcpy(g_ext_arm9_buf, data, dsize);
+		result = g_ext_arm9_loaded = 1;
+	}
+	
+	return result;
+}
+
 /* copies ARM9 payload to FCRAM
    - before overwriting it in memory, Brahma creates a backup copy of
      the mapped firm binary's ARM9 entry point. The copy will be stored

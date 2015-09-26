@@ -48,17 +48,11 @@ s32 quick_boot_firm (s32 load_from_disk) {
 
 s32 main (void) {
 	// Initialize services
-	srvInit();
-	aptInit();
-	hidInit(NULL);
 	gfxInitDefault();
-	fsInit();
-	sdmcInit();
-	hbInit();
-	qtmInit();
 	
 	consoleInit(GFX_BOTTOM, NULL);
 	if (brahma_init()) {
+		
 		hidScanInput();
 		u32 kHeld = hidKeysHeld();
 	 
@@ -82,13 +76,7 @@ s32 main (void) {
 		wait_any_key();
 	}
 
-	hbExit();
-	sdmcExit();
-	fsExit();
 	gfxExit();
-	hidExit();
-	aptExit();
-	srvExit();
 	// Return to hbmenu
 	return 0;
 }

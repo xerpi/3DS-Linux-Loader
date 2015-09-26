@@ -31,9 +31,9 @@ BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data
 INCLUDES	:=	include
-APP_TITLE	:=	BRAHMA
+APP_TITLE	:=	BRAHMA II
 APP_DESCRIPTION :=	Privileged ARM11/ARM9 Code Execution
-APP_AUTHOR	:=	patois
+APP_AUTHOR	:=	patois, delebile
 
 #---------------------------------------------------------------------------------
 # options for code generation

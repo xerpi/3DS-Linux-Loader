@@ -2,7 +2,8 @@ Brahma II is a port of the original Brahma in order to
 make it run in the new homebrew methods like Ninjhax2.
 
 Current status :
-  - Exploit success rate : 80% (Booted 8 times of 10 tries)
+  - Success rate (OLD3DS) : 100% (20/20)
+  - Success rate (NEW3DS) : To be tested
   - Tested on : TubeHax, ThemeHax
   
 2015, Delebile

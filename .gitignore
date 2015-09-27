@@ -1,6 +1,7 @@
 *.elf
 *.3dsx
 *.smdh
+*.bat
 
 build
 output

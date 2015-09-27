@@ -52,7 +52,6 @@ s32 main (void) {
 	
 	consoleInit(GFX_BOTTOM, NULL);
 	if (brahma_init()) {
-		
 		hidScanInput();
 		u32 kHeld = hidKeysHeld();
 	 

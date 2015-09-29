@@ -49,6 +49,7 @@ s32 quick_boot_firm (s32 load_from_disk) {
 s32 main (void) {
 	// Initialize services
 	gfxInitDefault();
+	gfxSwapBuffers(); 
 	
 	consoleInit(GFX_BOTTOM, NULL);
 	if (brahma_init()) {

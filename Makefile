@@ -31,9 +31,9 @@ BUILD		:=	build
 SOURCES		:=	source source/libkhax
 DATA		:=	data
 INCLUDES	:=	include
-APP_TITLE	:=	BRAHMA II
-APP_DESCRIPTION :=	Privileged ARM11/ARM9 Code Execution
-APP_AUTHOR	:=	patois, delebile
+APP_TITLE	:=	Linux Loader
+APP_DESCRIPTION :=	ARM11 Linux Loader
+APP_AUTHOR	:=	xerpi, patois, delebile
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -48,7 +48,7 @@ CFLAGS	+=	$(INCLUDE) -DARM11 -D_3DS -DARM_ARCH -w
 
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11 -w
 
-ASFLAGS	:=	-g $(ARCH)
+ASFLAGS	:=	-g $(ARCH) $(INCLUDE)
 LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
 LIBS	:= -lctru -lm
@@ -131,6 +131,9 @@ clean:
 	@echo clean ...
 	@rm -fr $(BUILD) $(TARGET).3dsx $(OUTPUT).smdh $(TARGET).elf
 
+#---------------------------------------------------------------------------------
+send: $(BUILD)
+	3dslink -a 192.168.1.45 $(TARGET).3dsx
 
 #---------------------------------------------------------------------------------
 else

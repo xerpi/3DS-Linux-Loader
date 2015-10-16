@@ -16,8 +16,6 @@ static inline void *fcram_phys2linear(void *linear_start, unsigned int phys_addr
 	return (void *)(linear_start + (phys_addr - 0x20000000));
 }
 
-extern void mlgee();
-
 int main(void)
 {
 	// First allocate the buffer for the Linux image
@@ -30,8 +28,6 @@ int main(void)
 	consoleInit(GFX_BOTTOM, NULL);
 
 	printf("Linux loader by xerpi\n\n");
-
-	//mlgee();
 
 	if (brahma_init()) {
 
@@ -55,9 +51,6 @@ int main(void)
 		while ((n = fread((u32)fcram_phys2linear(linux_buffer, ZIMAGE_ADDR)+(u32)linux_bin_size, 1, 0x10000, zImage)) > 0) {
 			linux_bin_size += n;
 		}
-
-		printf("[+] Linux buffer: %p\n", linux_buffer);
-		printf("[+] S'ha escrit a: 0x%08X\n", fcram_phys2linear(linux_buffer, ZIMAGE_ADDR));
 
 		printf("[+] Loaded kernel:\n");
 		printf("[+]     address: %p,\n", ZIMAGE_ADDR);

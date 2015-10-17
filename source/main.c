@@ -20,6 +20,7 @@ int main(void)
 {
 	// First allocate the buffer for the Linux image + DTB
 	void *linux_buffer = linearAlloc(16*1024*1024);
+	memset(linux_buffer, 0, 16*1024*1024);
 
 	// Initialize services
 	gfxInitDefault();
@@ -74,18 +75,23 @@ int main(void)
 
 		n = 0;
 		unsigned int dtb_bin_size = 0;
-		while ((n = fread(fcram_phys2linear(linux_buffer, PARAMS_ADDR)+dtb_bin_size, 1, 0x10000, dtb)) > 0) {
+		while ((n = fread(fcram_phys2linear(linux_buffer, PARAMS_TMP_ADDR)+dtb_bin_size, 1, 0x10000, dtb)) > 0) {
 			dtb_bin_size += n;
 		}
 
 		fclose(dtb);
 
 		printf("[+] Loaded " DTB_FILENAME ":\n");
-		printf("[+]     address: %p,\n", PARAMS_ADDR);
+		printf("[+]     temp address: %p,\n", PARAMS_TMP_ADDR);
+		printf("[+]     dest address: %p,\n", PARAMS_ADDR);
 		printf("[+]     size:    0x%08X bytes\n", dtb_bin_size);
+
+		// Store the DTB size to *PARAMS_SIZE_ADDR
+		*(unsigned int *)fcram_phys2linear(linux_buffer, PARAMS_SIZE_ADDR) = dtb_bin_size;
 
 		GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, ZIMAGE_ADDR), linux_bin_size);
 		GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, PARAMS_ADDR), dtb_bin_size);
+		GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, PARAMS_SIZE_ADDR), sizeof(unsigned int));
 
 		printf("[+] Loading Linux Payloads...\n");
 

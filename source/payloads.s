@@ -47,6 +47,16 @@ linux_arm9_stage_start:
 	orr r0, r0, #(0x80 | 0x40)
 	msr cpsr_c, r0
 
+	@ Get the Linux Params size
+	ldr r2, =PARAMS_SIZE_ADDR
+	ldr r2, [r2]
+
+	@ Copy the Linux Params to its
+	@ destination address
+	ldr r0, =PARAMS_ADDR
+	ldr r1, =PARAMS_TMP_ADDR
+	bl memcpy32
+
 	@ The ARM9 code is loaded to 0x23F00000 so the
 	@ linux_arm11_stage_start address will be at:
 	@     0x23F00000 + ARM9_payload_size
@@ -60,6 +70,19 @@ loop:
 	mov r0, #0
 	mcr p15, 0, r0, c7, c0, 4
 	b loop
+
+@ r0 = dst, r1 = src, r2 = size
+memcpy32:
+	cmp r2, #0
+	ble _memcpy32_ret
+	ldr r3, [r1]
+	str r3, [r0]
+	sub r2, #4
+	add r0, #4
+	add r1, #4
+	b memcpy32
+_memcpy32_ret:
+	bx lr
 
 	.ltorg
 

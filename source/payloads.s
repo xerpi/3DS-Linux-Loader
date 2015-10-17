@@ -12,7 +12,7 @@
 #define LCD_FB_B_ADDR_OFFSET  (0x94)
 #define FB_TOP_SIZE           (400*240*3)
 #define FB_BOT_SIZE           (320*240*3)
-#define FB_TOP_LEFT1          (VRAM_BASE)
+#define FB_TOP_LEFT1          (FB_BASE_PA)
 #define FB_TOP_LEFT2          (FB_TOP_LEFT1  + FB_TOP_SIZE)
 #define FB_TOP_RIGHT1         (FB_TOP_LEFT2  + FB_TOP_SIZE)
 #define FB_TOP_RIGHT2         (FB_TOP_RIGHT1 + FB_TOP_SIZE)
@@ -26,21 +26,12 @@ linux_payloads_start:
 
 	.cpu arm946e-s
 
-_start:
-	b _init
-
-	@ required, don't move :)
-	@ will be set to FIRM ARM9 entry point by BRAHMA
+arm9_start:
+	b arm9_init
+	@ required by BRAHMA
 	arm9ep_backup:  .long 0xFFFF0000
-
-_init:
-	stmfd sp!, {r0-r12, lr}
-	bl linux_arm9_stage_start
-	ldmfd sp!, {r0-r12, lr}
-
-	@ return control to FIRM
-	ldr pc, arm9ep_backup
-
+arm9_init:
+	b linux_arm9_stage_start
 
 @@@@@@@@@@@@@@@@@@@@@@@@ ARM9 Stage 0 @@@@@@@@@@@@@@@@@@@@@@@@
 
@@ -56,10 +47,6 @@ linux_arm9_stage_start:
 	orr r0, r0, #(0x80 | 0x40)
 	msr cpsr_c, r0
 
-	ldr r0, =SHARED_CHAR
-	mov r1, #0
-	str r1, [r0]
-
 	@ The ARM9 code is loaded to 0x23F00000 so the
 	@ linux_arm11_stage_start address will be at:
 	@     0x23F00000 + ARM9_payload_size
@@ -72,8 +59,6 @@ loop:
 	@ Enter wait-for-interrupt state
 	mov r0, #0
 	mcr p15, 0, r0, c7, c0, 4
-	b loop
-
 	b loop
 
 	.ltorg
@@ -109,7 +94,7 @@ linux_arm11_stage_start:
 	@ Clear exclusive records
 	clrex
 
-	@@@ Map FBs to the VRAM @@@
+	@@@ Map Framebuffers @@@
 
 	@ Top screen
 	ldr r0, =LCD_FB_PDC0
@@ -141,7 +126,7 @@ linux_arm11_stage_start:
 	ldr r2, =PARAMS_ADDR
 	ldr lr, =ZIMAGE_ADDR
 
-	@ Jump tot the kernel!
+	@ Jump to the kernel!
 	bx lr
 
 	.ltorg

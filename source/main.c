@@ -18,8 +18,8 @@ static inline void *fcram_phys2linear(void *linear_start, unsigned int phys_addr
 
 int main(void)
 {
-	// First allocate the buffer for the Linux image
-	void *linux_buffer = linearAlloc(28*1024*1024);
+	// First allocate the buffer for the Linux image + DTB
+	void *linux_buffer = linearAlloc(16*1024*1024);
 
 	// Initialize services
 	gfxInitDefault();
@@ -48,18 +48,18 @@ int main(void)
 		unsigned int n = 0;
 		unsigned int linux_bin_size = 0;
 
-		while ((n = fread((u32)fcram_phys2linear(linux_buffer, ZIMAGE_ADDR)+(u32)linux_bin_size, 1, 0x10000, zImage)) > 0) {
+		while ((n = fread(fcram_phys2linear(linux_buffer, ZIMAGE_ADDR)+linux_bin_size, 1, 0x10000, zImage)) > 0) {
 			linux_bin_size += n;
 		}
+
+		fclose(zImage);
 
 		printf("[+] Loaded kernel:\n");
 		printf("[+]     address: %p,\n", ZIMAGE_ADDR);
 		printf("[+]     size:    0x%08X bytes\n", linux_bin_size);
 
-		fclose(zImage);
-
 		//Load the device tree to PARAMS_ADDR
-		printf("[+] Opening " DTB_FILENAME "\n");
+		printf("\n[+] Opening " DTB_FILENAME "\n");
 
 		FILE *dtb = fopen(DTB_FILENAME, "rb");
 
@@ -78,11 +78,11 @@ int main(void)
 			dtb_bin_size += n;
 		}
 
+		fclose(dtb);
+
 		printf("[+] Loaded " DTB_FILENAME ":\n");
 		printf("[+]     address: %p,\n", PARAMS_ADDR);
 		printf("[+]     size:    0x%08X bytes\n", dtb_bin_size);
-
-		fclose(dtb);
 
 		GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, ZIMAGE_ADDR), linux_bin_size);
 		GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, PARAMS_ADDR), dtb_bin_size);
@@ -91,7 +91,7 @@ int main(void)
 
 		unsigned int linux_payloads_size = (u32)&linux_payloads_end - (u32)&linux_payloads_start;
 
-		printf("[+] size %i\n", linux_payloads_size);
+		printf("[+]     size %i\n", linux_payloads_size);
 
 		load_arm9_payload_from_mem(&linux_payloads_start, linux_payloads_size);
 

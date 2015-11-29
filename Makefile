@@ -34,6 +34,7 @@ INCLUDES	:=	include
 APP_TITLE	:=	Linux Loader
 APP_DESCRIPTION :=	ARM11 Linux Loader
 APP_AUTHOR	:=	xerpi, patois, delebile
+ICON		:=	icon.png
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -134,6 +135,12 @@ clean:
 #---------------------------------------------------------------------------------
 send: $(BUILD)
 	3dslink -a 192.168.1.45 $(TARGET).3dsx
+
+#---------------------------------------------------------------------------------
+copy: $(BUILD)
+	cp $(TARGET).3dsx /mnt/3DS/boot.3dsx
+	sync
+	@echo "Copied!"
 
 #---------------------------------------------------------------------------------
 else

@@ -8,6 +8,8 @@
 #include "sochlp.h"
 #include "linux_config.h"
 
+#define LINUX_BUFFER_SIZE (20*1024*1024)
+
 extern void *linux_payloads_start;
 extern void *linux_payloads_end;
 
@@ -16,11 +18,27 @@ static inline void *fcram_phys2linear(void *linear_start, unsigned int phys_addr
 	return (void *)(linear_start + (phys_addr - 0x20000000));
 }
 
+void flush_dcache()
+{
+	unsigned int i;
+	volatile unsigned int *p;
+	void *dummymem;
+
+	if (!(dummymem = malloc(2*1024*1024)))
+		return;
+
+	p = dummymem;
+	for (i = 0; i < 2*1024*1024; i+=4)
+		*p++;
+
+	free(dummymem);
+}
+
 int main(void)
 {
 	// First allocate the buffer for the Linux image + DTB
-	void *linux_buffer = linearAlloc(16*1024*1024);
-	memset(linux_buffer, 0, 16*1024*1024);
+	void *linux_buffer = linearAlloc(LINUX_BUFFER_SIZE);
+	memset(linux_buffer, 0, LINUX_BUFFER_SIZE);
 
 	// Initialize services
 	gfxInitDefault();
@@ -89,9 +107,9 @@ int main(void)
 		// Store the DTB size to *PARAMS_SIZE_ADDR
 		*(unsigned int *)fcram_phys2linear(linux_buffer, PARAMS_SIZE_ADDR) = dtb_bin_size;
 
-		GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, ZIMAGE_ADDR), linux_bin_size);
-		GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, PARAMS_ADDR), dtb_bin_size);
-		GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, PARAMS_SIZE_ADDR), sizeof(unsigned int));
+		//GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, ZIMAGE_ADDR), linux_bin_size);
+		//GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, PARAMS_ADDR), dtb_bin_size);
+		//GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, PARAMS_SIZE_ADDR), sizeof(unsigned int));
 
 		printf("[+] Loading Linux Payloads...\n");
 
@@ -100,6 +118,10 @@ int main(void)
 		printf("[+]     size %i\n", linux_payloads_size);
 
 		load_arm9_payload_from_mem(&linux_payloads_start, linux_payloads_size);
+
+		GSPGPU_FlushDataCache(NULL, linux_buffer, LINUX_BUFFER_SIZE);
+
+		flush_dcache();
 
 		//soc_init();
 		//soc_exit();

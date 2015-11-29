@@ -9,6 +9,7 @@
 #define LCD_FB_PDC0           (0x10400400)
 #define LCD_FB_PDC1           (0x10400500)
 #define LCD_FB_A_ADDR_OFFSET  (0x68)
+#define LCD_FB_SELECT_OFFSET  (0x78)
 #define LCD_FB_B_ADDR_OFFSET  (0x94)
 #define FB_TOP_SIZE           (400*240*3)
 #define FB_BOT_SIZE           (320*240*3)
@@ -117,9 +118,9 @@ linux_arm11_stage_start:
 	@ Clear exclusive records
 	clrex
 
-	@@@ Map Framebuffers @@@
+	@@@@@ Map Framebuffers @@@@@
 
-	@ Top screen
+	@@@ Top screen @@@
 	ldr r0, =LCD_FB_PDC0
 
 	@ Left eye
@@ -134,13 +135,23 @@ linux_arm11_stage_start:
 	ldr r1, =FB_TOP_RIGHT2
 	str r1, [r0, #(LCD_FB_B_ADDR_OFFSET + 4)]
 
-	@ Bottom screen
+	@ Select framebuffer 0
+	mov r1, #0
+	str r1, [r0, #LCD_FB_SELECT_OFFSET]
+
+	@@@ Bottom screen @@@
 	ldr r0, =LCD_FB_PDC1
 
 	ldr r1, =FB_BOT_1
 	str r1, [r0, #(LCD_FB_A_ADDR_OFFSET + 0)]
 	ldr r1, =FB_BOT_2
 	str r1, [r0, #(LCD_FB_A_ADDR_OFFSET + 4)]
+
+	@ Select framebuffer 0
+	mov r1, #0
+	str r1, [r0, #LCD_FB_SELECT_OFFSET]
+
+	@@@@@ Jump to the kernel @@@@@
 
 	@ Setup the registers before
 	@ jumping to the kernel entry

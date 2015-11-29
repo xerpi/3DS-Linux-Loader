@@ -2,12 +2,12 @@
 #define PA_ARM11_CODE_ADDR (0x1FFFFFF0)
 
 // Payloads config
-#define FB_BASE_PA      (VRAM_BASE)
-#define PARAMS_TMP_ADDR  (0x20100000)
-#define PARAMS_SIZE_ADDR (0x200FFFFC)
+#define FB_BASE_PA       (VRAM_BASE)
+#define PARAMS_TMP_ADDR  (0x21400000)
+#define PARAMS_SIZE_ADDR (0x214FFFFC)
 
 // Linux settings
-#define ZIMAGE_ADDR    (0x20408000)
+#define ZIMAGE_ADDR    (0x20008000)
 #define ZRELADDR       (0x20008000)
 #define PARAMS_ADDR    (0x20000100)
 #define INITRD_ADDR    (0x20000000)

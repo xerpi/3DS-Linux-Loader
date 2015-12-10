@@ -18,7 +18,7 @@ static inline void *fcram_phys2linear(void *linear_start, unsigned int phys_addr
 	return (void *)(linear_start + (phys_addr - 0x20000000));
 }
 
-void flush_dcache()
+static void flush_dcache()
 {
 	unsigned int i;
 	volatile unsigned int *p;
@@ -107,9 +107,9 @@ int main(void)
 		// Store the DTB size to *PARAMS_SIZE_ADDR
 		*(unsigned int *)fcram_phys2linear(linux_buffer, PARAMS_SIZE_ADDR) = dtb_bin_size;
 
-		//GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, ZIMAGE_ADDR), linux_bin_size);
-		//GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, PARAMS_ADDR), dtb_bin_size);
-		//GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, PARAMS_SIZE_ADDR), sizeof(unsigned int));
+		GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, ZIMAGE_ADDR), linux_bin_size);
+		GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, PARAMS_ADDR), dtb_bin_size);
+		GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, PARAMS_SIZE_ADDR), sizeof(unsigned int));
 
 		printf("[+] Loading Linux Payloads...\n");
 
@@ -119,14 +119,12 @@ int main(void)
 
 		load_arm9_payload_from_mem(&linux_payloads_start, linux_payloads_size);
 
-		GSPGPU_FlushDataCache(NULL, linux_buffer, LINUX_BUFFER_SIZE);
-
 		flush_dcache();
 
 		//soc_init();
 		//soc_exit();
 
-		wait_any_key();
+		//wait_any_key();
 
 		printf("[+] Running ARM9 payload\n");
 		firm_reboot();

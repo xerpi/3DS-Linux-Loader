@@ -107,9 +107,9 @@ int main(void)
 		// Store the DTB size to *PARAMS_SIZE_ADDR
 		*(unsigned int *)fcram_phys2linear(linux_buffer, PARAMS_SIZE_ADDR) = dtb_bin_size;
 
-		GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, ZIMAGE_ADDR), linux_bin_size);
-		GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, PARAMS_ADDR), dtb_bin_size);
-		GSPGPU_FlushDataCache(NULL, fcram_phys2linear(linux_buffer, PARAMS_SIZE_ADDR), sizeof(unsigned int));
+		GSPGPU_FlushDataCache(fcram_phys2linear(linux_buffer, ZIMAGE_ADDR), linux_bin_size);
+		GSPGPU_FlushDataCache(fcram_phys2linear(linux_buffer, PARAMS_ADDR), dtb_bin_size);
+		GSPGPU_FlushDataCache(fcram_phys2linear(linux_buffer, PARAMS_SIZE_ADDR), sizeof(unsigned int));
 
 		printf("[+] Loading Linux Payloads...\n");
 

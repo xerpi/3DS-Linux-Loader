@@ -12,6 +12,12 @@
 #include "exploitdata.h"
 #include "libkhax/khax.h"
 
+static u8  *g_ext_arm9_buf;
+static u32 g_ext_arm9_size = 0;
+static s32 g_ext_arm9_loaded = 0;
+static struct exploit_data g_expdata;
+static struct arm11_shared_data g_arm11shared;
+u32 frameBufferData[3];
 
 /* should be the very first call. allocates heap buffer
    for ARM9 payload */
@@ -49,7 +55,7 @@ s32 get_exploit_data (struct exploit_data *data) {
 		return result;
 
 	fversion = osGetFirmVersion();
-	APT_CheckNew3DS(NULL, &isN3DS);
+	APT_CheckNew3DS(&isN3DS);
 	sysmodel = isN3DS ? SYS_MODEL_NEW_3DS : SYS_MODEL_OLD_3DS;
 
 	/* copy platform and firmware dependent data */
@@ -82,7 +88,6 @@ s32 setup_exploit_data (void) {
 s32 recv_arm9_payload (void) {
 	s32 sockfd;
 	struct sockaddr_in sa;
-	s32 ret;
 	u32 kDown, old_kDown;
 	s32 clientfd;
 	struct sockaddr_in client_addr;
@@ -99,7 +104,7 @@ s32 recv_arm9_payload (void) {
 	sa.sin_port = htons(BRAHMA_NETWORK_PORT);
 	sa.sin_addr.s_addr = gethostid();
 
-    if (bind(sockfd, (struct sockaddr*)&sa, sizeof(sa)) != 0) {
+	if (bind(sockfd, (struct sockaddr*)&sa, sizeof(sa)) != 0) {
 		printf("[!] Error: bind()\n");
 		close(sockfd);
 		return 0;
@@ -147,7 +152,7 @@ s32 recv_arm9_payload (void) {
 	u32 total = 0;
 	s32 overflow = 0;
 	while ((recvd = recv(clientfd, g_ext_arm9_buf + total,
-	                     ARM9_PAYLOAD_MAX_SIZE - total, 0)) != 0) {
+						 ARM9_PAYLOAD_MAX_SIZE - total, 0)) != 0) {
 		if (recvd != -1) {
 			total += recvd;
 			printf(".");
@@ -173,23 +178,34 @@ s32 recv_arm9_payload (void) {
 
 /* reads ARM9 payload from a given path.
    filename: full path of payload
+   offset: offset of the payload
+   max_psize: if > 0 max payload size (should be <= ARM9_MAX_PAYLOAD_SIZE)
    returns: 0 on failure, 1 on success */
-s32 load_arm9_payload (char *filename) {
+s32 load_arm9_payload (char *filename, u32 offset, u32 max_psize) {
 	s32 result = 0;
 	u32 fsize = 0;
+	u32 psize = 0;
+
+    if ((max_psize == 0) || (max_psize > ARM9_PAYLOAD_MAX_SIZE))
+        max_psize = ARM9_PAYLOAD_MAX_SIZE;
 
 	if (!filename)
 		return result;
 
 	FILE *f = fopen(filename, "rb");
 	if (f) {
-		fseek(f , 0, SEEK_END);
+		fseek(f, 0, SEEK_END);
 		fsize = ftell(f);
-		g_ext_arm9_size = fsize;
-		rewind(f);
-		if (fsize >= 8 && (fsize <= ARM9_PAYLOAD_MAX_SIZE)) {
-				u32 bytes_read = fread(g_ext_arm9_buf, 1, fsize, f);
-				result = (g_ext_arm9_loaded = (bytes_read == fsize));
+		if (offset <= fsize) {
+            psize = fsize - offset;
+            if (offset > 0 && psize > max_psize)
+                psize = max_psize; // only fix when offset > 0
+			fseek(f, offset, SEEK_SET);
+			g_ext_arm9_size = psize;
+			if (psize >= 8 && (psize <= ARM9_PAYLOAD_MAX_SIZE)) {
+				u32 bytes_read = fread(g_ext_arm9_buf, 1, psize, f);
+				result = (g_ext_arm9_loaded = (bytes_read == psize));
+			}
 		}
 		fclose(f);
 	}
@@ -214,13 +230,13 @@ s32 load_arm9_payload_from_mem (u8* data, u32 dsize) {
 
 /* copies ARM9 payload to FCRAM
    - before overwriting it in memory, Brahma creates a backup copy of
-     the mapped firm binary's ARM9 entry point. The copy will be stored
-     into offset 4 of the ARM9 payload during run-time.
-     This allows the ARM9 payload to resume booting the Nintendo firmware
-     code.
-     Thus, the format of ARM9 payload written for Brahma is the following:
-     - a branch instruction at offset 0 and
-     - a placeholder (u32) at offset 4 (=ARM9 entrypoint) */
+	 the mapped firm binary's ARM9 entry point. The copy will be stored
+	 into offset 4 of the ARM9 payload during run-time.
+	 This allows the ARM9 payload to resume booting the Nintendo firmware
+	 code.
+	 Thus, the format of ARM9 payload written for Brahma is the following:
+	 - a branch instruction at offset 0 and
+	 - a placeholder (u32) at offset 4 (=ARM9 entrypoint) */
 s32 map_arm9_payload (void) {
 	void *src;
 	volatile void *dst;
@@ -231,7 +247,7 @@ s32 map_arm9_payload (void) {
 	dst = (void *)(g_expdata.va_fcram_base + OFFS_FCRAM_ARM9_PAYLOAD);
 
 	if (!g_ext_arm9_loaded) {
-		// defaul ARM9 payload
+		// default ARM9 payload
 		src = &arm9_start;
 		size = (u8 *)&arm9_end - (u8 *)&arm9_start;
 	}
@@ -272,7 +288,7 @@ s32 map_arm11_payload (void) {
 	size = sizeof(g_arm11shared);
 
 	dst = (u8 *)(g_expdata.va_exc_handler_base_W +
-	      OFFS_EXC_HANDLER_UNUSED + offs);
+		  OFFS_EXC_HANDLER_UNUSED + offs);
 
 	// TODO sanitize 'size'
 	if (result_a && size) {
@@ -286,9 +302,9 @@ s32 map_arm11_payload (void) {
 void exploit_arm9_race_condition (void) {
 
 	s32 (* const _KernelSetState)(u32, u32, u32, u32) =
-	    (void *)g_expdata.va_kernelsetstate;
+		(void *)g_expdata.va_kernelsetstate;
 
-	asm volatile ("clrex");
+	__asm__ volatile ("clrex");
 
 	/* copy ARM11 payload and console specific data */
 	if (map_arm11_payload() &&
@@ -299,14 +315,15 @@ void exploit_arm9_race_condition (void) {
 		   our code (hook1 and hook2) as soon as a
 		   "firmlaunch" is triggered */
 		redirect_codeflow(g_expdata.va_exc_handler_base_X +
-		                  OFFS_EXC_HANDLER_UNUSED,
-		                  g_expdata.va_patch_hook1);
+						  OFFS_EXC_HANDLER_UNUSED,
+						  g_expdata.va_patch_hook1);
 
 		redirect_codeflow(PA_EXC_HANDLER_BASE +
-		                  OFFS_EXC_HANDLER_UNUSED + 4,
-		                  g_expdata.va_patch_hook2);
+						  OFFS_EXC_HANDLER_UNUSED + 4,
+						  g_expdata.va_patch_hook2);
 
 		CleanEntireDataCache();
+		dsb();
 		InvalidateEntireInstructionCache();
 
 		// trigger ARM9 code execution through "firmlaunch"
@@ -315,21 +332,15 @@ void exploit_arm9_race_condition (void) {
 	}
 	return;
 }
-GSP_FramebufferInfo topFramebufferInfo, bottomFramebufferInfo;
 
 /* restore svcCreateThread code (not really required,
    but just to be on the safe side) */
 s32 priv_firm_reboot (void) {
-	asm volatile ("cpsid aif");
-	u32 *save = (u32 *)(g_expdata.va_fcram_base + 0x3FFFE00);
-    save[0] = topFramebufferInfo.framebuf0_vaddr;
-   	save[1] = topFramebufferInfo.framebuf1_vaddr;
-	save[2] = bottomFramebufferInfo.framebuf0_vaddr;
+	__asm__ volatile ("cpsid aif");
 
-// Working around a GCC bug to translate the va address to pa...
-    save[0] += 0xC000000;  // (pa FCRAM address - va FCRAM address)
-    save[1] += 0xC000000;
-    save[2] += 0xC000000;
+	// Save the framebuffers for arm9
+	u32 *save = (u32 *)(g_expdata.va_fcram_base + 0x3FFFE00);
+	memcpy(save, frameBufferData, sizeof(u32) * sizeof(frameBufferData));
 
 	exploit_arm9_race_condition();
 	return 0;
@@ -339,6 +350,15 @@ s32 priv_firm_reboot (void) {
    function. otherwise, calling this function simply reboots
    the handheld */
 s32 firm_reboot (void) {
+    // Make sure gfx is initialized
+    gfxInitDefault();
+
+    // Save the framebuffers for arm11.
+    frameBufferData[0] = (u32)gfxGetFramebuffer(GFX_TOP, GFX_LEFT, NULL, NULL) + 0xC000000;
+    frameBufferData[1] = (u32)gfxGetFramebuffer(GFX_TOP, GFX_RIGHT, NULL, NULL) + 0xC000000;
+    frameBufferData[2] = (u32)gfxGetFramebuffer(GFX_BOTTOM, 0, NULL, NULL) + 0xC000000;
+    gfxSwapBuffers();
+
 	s32 fail_stage = 0;
 
 	fail_stage++; /* platform or firmware not supported, ARM11 exploit failure */

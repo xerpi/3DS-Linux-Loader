@@ -9,7 +9,11 @@
 #define LCD_FB_PDC0           (0x10400400)
 #define LCD_FB_PDC1           (0x10400500)
 #define LCD_FB_A_ADDR_OFFSET  (0x68)
+#define LCD_FB_FORMAT_OFFSET  (0x70)
+#define LCD_FB_PDC0_FORMAT    (0x80341)
 #define LCD_FB_SELECT_OFFSET  (0x78)
+#define LCD_FB_STRIDE_OFFSET  (0x90)
+#define LCD_FB_PDC0_STRIDE    (0x2D0)
 #define LCD_FB_B_ADDR_OFFSET  (0x94)
 #define FB_TOP_SIZE           (400*240*3)
 #define FB_BOT_SIZE           (320*240*3)
@@ -139,9 +143,13 @@ linux_arm11_stage_start:
 	ldr r1, =FB_TOP_RIGHT2
 	str r1, [r0, #(LCD_FB_B_ADDR_OFFSET + 4)]
 
-	@ Select framebuffer 0
+	@ Select framebuffer 0 and adjust format/stride
 	mov r1, #0
 	str r1, [r0, #LCD_FB_SELECT_OFFSET]
+	ldr r1, =LCD_FB_PDC0_FORMAT
+	str r1, [r0, #LCD_FB_FORMAT_OFFSET]
+	mov r1, #LCD_FB_PDC0_STRIDE
+	str r1, [r0, #LCD_FB_STRIDE_OFFSET]
 
 	@@@ Bottom screen @@@
 	ldr r0, =LCD_FB_PDC1

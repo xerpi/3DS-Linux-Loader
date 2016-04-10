@@ -58,6 +58,24 @@ linux_arm9_stage_start:
 	ldr r1, =PARAMS_TMP_ADDR
 	bl memcpy32
 
+	@ Get the arm9linuxfw size
+	ldr r2, =ARM9LINUXFW_SIZE_ADDR
+	ldr r2, [r2]
+
+	@ If it's 0, skip the copy
+	cmp r2, #0
+	moveq r5, #0 @ No arm9linuxfw :(
+	movne r5, #1 @ We have arm9linuxfw!
+	beq skip_copy_arm9linuxfw
+
+	@ Copy the arm9linuxfw to its
+	@ destination address
+	ldr r0, =ARM9LINUXFW_ADDR
+	ldr r1, =ARM9LINUXFW_TMP_ADDR
+	bl memcpy32
+
+skip_copy_arm9linuxfw:
+
 	@ The ARM9 code is loaded to 0x23F00000 so the
 	@ linux_arm11_stage_start address will be at:
 	@     0x23F00000 + ARM9_payload_size
@@ -66,11 +84,21 @@ linux_arm9_stage_start:
 	ldr r1, linux_arm11_stage_pa
 	str r1, [r0]
 
-loop:
+	cmp r5, #1
+	beq jump_arm9linuxfw
+
+	@ If we are here, there's no arm9linuxfw, so we just
+	@ busy loop in WFI state
+busy_loop:
 	@ Enter wait-for-interrupt state
 	mov r0, #0
 	mcr p15, 0, r0, c7, c0, 4
-	b loop
+	b busy_loop
+
+	@ We have a arm9linuxfw so jump there
+jump_arm9linuxfw:
+	ldr lr, =ARM9LINUXFW_ADDR
+	bx lr
 
 @ r0 = dst, r1 = src, r2 = size
 memcpy32:

@@ -77,7 +77,7 @@ int main(void)
 		printf("[+]     address: %p,\n", ZIMAGE_ADDR);
 		printf("[+]     size:    0x%08X bytes\n", linux_bin_size);
 
-		//Load the device tree to PARAMS_ADDR
+		//Load the device tree to PARAMS_TMP_ADDR
 		printf("\n[+] Opening " DTB_FILENAME "\n");
 
 		FILE *dtb = fopen(DTB_FILENAME, "rb");
@@ -99,10 +99,34 @@ int main(void)
 
 		fclose(dtb);
 
-		printf("[+] Loaded " DTB_FILENAME ":\n");
-		printf("[+]     temp address: %p,\n", PARAMS_TMP_ADDR);
-		printf("[+]     dest address: %p,\n", PARAMS_ADDR);
-		printf("[+]     size:    0x%08X bytes\n", dtb_bin_size);
+		//Load the arm9linuxfw to ARM9LINUXFW_TMP_ADDR
+		printf("\n[+] Opening " ARM9LINUXFW_FILENAME "\n");
+
+		FILE *arm9fw = fopen(ARM9LINUXFW_FILENAME, "rb");
+
+		printf("[+] FileOpen returned: %p\n", arm9fw);
+
+		if (arm9fw != NULL) {
+			n = 0;
+			unsigned int arm9fw_bin_size = 0;
+			while ((n = fread(fcram_phys2linear(linux_buffer, ARM9LINUXFW_TMP_ADDR)+arm9fw_bin_size, 1, 0x10000, arm9fw)) > 0) {
+				arm9fw_bin_size += n;
+			}
+
+			fclose(arm9fw);
+
+			printf("[+] Loaded " ARM9LINUXFW_FILENAME ":\n");
+			printf("[+]     temp address: %p,\n", ARM9LINUXFW_TMP_ADDR);
+			printf("[+]     dest address: %p,\n", ARM9LINUXFW_ADDR);
+			printf("[+]     size:    0x%08X bytes\n", arm9fw_bin_size);
+
+			// Store the arm9linuxfw size to *ARM9LINUXFW_SIZE_ADDR
+			*(unsigned int *)fcram_phys2linear(linux_buffer, ARM9LINUXFW_SIZE_ADDR) = arm9fw_bin_size;
+		} else {
+			printf("\n\n[+] WARNING " ARM9LINUXFW_FILENAME " not found!\n\n");
+			// Store a 0 size to *ARM9LINUXFW_SIZE_ADDR
+			*(unsigned int *)fcram_phys2linear(linux_buffer, ARM9LINUXFW_SIZE_ADDR) = 0;
+		}
 
 		// Store the DTB size to *PARAMS_SIZE_ADDR
 		*(unsigned int *)fcram_phys2linear(linux_buffer, PARAMS_SIZE_ADDR) = dtb_bin_size;
@@ -110,6 +134,7 @@ int main(void)
 		GSPGPU_FlushDataCache(fcram_phys2linear(linux_buffer, ZIMAGE_ADDR), linux_bin_size);
 		GSPGPU_FlushDataCache(fcram_phys2linear(linux_buffer, PARAMS_ADDR), dtb_bin_size);
 		GSPGPU_FlushDataCache(fcram_phys2linear(linux_buffer, PARAMS_SIZE_ADDR), sizeof(unsigned int));
+		GSPGPU_FlushDataCache(fcram_phys2linear(linux_buffer, ARM9LINUXFW_SIZE_ADDR), sizeof(unsigned int));
 
 		printf("[+] Loading Linux Payloads...\n");
 

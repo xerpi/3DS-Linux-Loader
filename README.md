@@ -1,18 +1,16 @@
 # DEPRECATED, use [this](https://github.com/xerpi/firm_linux_loader) instead
 
-=========================================================
 3DS Linux loader
-=========================================================
 
-  Credits:
-  --------
-  - To 3dbrew.org and all its contributors for being such a great resource
-  - To whomever initially found the vulnerabilities and wrote the publicly
-    available exploit code
-  - To everybody who's been working on porting this exploit and its various
-    "bootstrap" branches to newer firmware versions and improving its stability
-    (in particular yifanlu, yuriks, shinyquagsire23 and delebile)
-  - To everybody involved in creating libctru, Ninjhax and the Homebrew Menu
+Credits:
+
+- To 3dbrew.org and all its contributors for being such a great resource
+- To whomever initially found the vulnerabilities and wrote the publicly
+available exploit code
+- To everybody who's been working on porting this exploit and its various
+"bootstrap" branches to newer firmware versions and improving its stability
+(in particular yifanlu, yuriks, shinyquagsire23 and delebile)
+- To everybody involved in creating libctru, Ninjhax and the Homebrew Menu
 
 Disclaimer:
 THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESSED OR IMPLIED WARRANTIES,
